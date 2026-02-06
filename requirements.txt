@@ -1,0 +1,16 @@
+# --- Core Dependencies ---
+python-rtmidi>=1.5.8        # MIDIコントローラー連携
+numpy>=1.24.0               # 数値計算・波形データ処理
+librosa>=0.10.0             # 楽曲解析 (BPM/Energy)
+mutagen>=1.45.0             # MP3メタデータ読み込み
+
+# --- GUI Framework ---
+PyQt6>=6.6.0                # メインGUI
+pyqtgraph>=0.13.0           # グラフ描画 (Energy Panel用)
+pyperclip>=1.8.0            # クリップボード連携 (プロンプトコピー用)
+
+# --- AI Integration ---
+google-generativeai>=0.8.0  # Gemini API連携
+
+# --- Dev / Testing ---
+pytest>=7.4.0               # テスト実行用

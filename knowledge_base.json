@@ -1,0 +1,414 @@
+{
+  "genres": {
+    "Deep House": {
+      "bpm_range": [115, 125],
+      "typical_bpm": 120,
+      "characteristics": {
+        "bassline": "deep, rolling",
+        "percussion": "minimal, groovy",
+        "atmosphere": "warm, soulful",
+        "vocals": "often soulful or jazzy"
+      },
+      "energy_level": "medium",
+      "structure": "intro-buildup-drop-breakdown-drop-outro",
+      "keywords": ["deep", "soulful", "groovy", "warm", "atmospheric"]
+    },
+    "House": {
+      "bpm_range": [120, 130],
+      "typical_bpm": 125,
+      "characteristics": {
+        "bassline": "four-on-the-floor",
+        "percussion": "classic 909 drums",
+        "atmosphere": "uplifting, energetic",
+        "vocals": "catchy hooks"
+      },
+      "energy_level": "high",
+      "structure": "intro-verse-chorus-breakdown-chorus-outro",
+      "keywords": ["uplifting", "energetic", "four-on-the-floor", "disco", "funky"]
+    },
+    "Tech House": {
+      "bpm_range": [120, 130],
+      "typical_bpm": 126,
+      "characteristics": {
+        "bassline": "rolling, driving",
+        "percussion": "crisp, minimal",
+        "atmosphere": "dark, hypnotic",
+        "vocals": "minimal or processed"
+      },
+      "energy_level": "high",
+      "structure": "intro-buildup-main-breakdown-main-outro",
+      "keywords": ["minimal", "driving", "hypnotic", "crisp", "rolling"]
+    },
+    "Techno": {
+      "bpm_range": [125, 135],
+      "typical_bpm": 130,
+      "characteristics": {
+        "bassline": "industrial, pounding",
+        "percussion": "hard, repetitive",
+        "atmosphere": "dark, mechanical",
+        "vocals": "rare or distorted"
+      },
+      "energy_level": "very_high",
+      "structure": "continuous-evolution-no-clear-drops",
+      "keywords": ["industrial", "dark", "pounding", "hypnotic", "mechanical"]
+    },
+    "Progressive House": {
+      "bpm_range": [125, 130],
+      "typical_bpm": 128,
+      "characteristics": {
+        "bassline": "melodic, evolving",
+        "percussion": "uplifting, big",
+        "atmosphere": "euphoric, emotional",
+        "vocals": "anthemic"
+      },
+      "energy_level": "very_high",
+      "structure": "long-intro-buildup-climax-breakdown-climax-outro",
+      "keywords": ["euphoric", "melodic", "uplifting", "anthemic", "emotional"]
+    },
+    "Trance": {
+      "bpm_range": [130, 145],
+      "typical_bpm": 138,
+      "characteristics": {
+        "bassline": "driving, arpeggiated",
+        "percussion": "fast, energetic",
+        "atmosphere": "uplifting, transcendent",
+        "vocals": "ethereal"
+      },
+      "energy_level": "very_high",
+      "structure": "intro-buildup-climax-breakdown-climax-outro",
+      "keywords": ["uplifting", "arpeggiated", "ethereal", "euphoric", "transcendent"]
+    },
+    "Hardstyle": {
+      "bpm_range": [145, 155],
+      "typical_bpm": 150,
+      "characteristics": {
+        "bassline": "distorted, reverse",
+        "percussion": "hard kick, energetic",
+        "atmosphere": "aggressive, powerful",
+        "vocals": "shouted or motivational"
+      },
+      "energy_level": "extreme",
+      "structure": "intro-buildup-climax-mid-intro-climax-outro",
+      "keywords": ["hard", "distorted", "aggressive", "powerful", "energetic"]
+    },
+    "Downtempo": {
+      "bpm_range": [80, 110],
+      "typical_bpm": 95,
+      "characteristics": {
+        "bassline": "smooth, laid-back",
+        "percussion": "minimal, jazzy",
+        "atmosphere": "chill, ambient",
+        "vocals": "soft or absent"
+      },
+      "energy_level": "low",
+      "structure": "free-form-ambient",
+      "keywords": ["chill", "ambient", "smooth", "laid-back", "jazzy"]
+    }
+  },
+  "transitions": {
+    "energy_progression": {
+      "warm_up": ["Deep House", "Downtempo"],
+      "building": ["House", "Tech House"],
+      "peak": ["Progressive House", "Techno", "Trance"],
+      "closing": ["House", "Deep House"]
+    },
+    "compatible_keys": {
+      "perfect_fifth": ["C-G", "D-A", "E-B", "F-C", "G-D", "A-E", "B-F#"],
+      "relative_minor": ["C-Am", "D-Bm", "E-C#m", "F-Dm", "G-Em", "A-F#m", "B-G#m"],
+      "same_key": ["C-C", "Cm-Cm"]
+    },
+    "bpm_tolerance": {
+      "safe": 3,
+      "acceptable": 5,
+      "risky": 8
+    }
+  },
+  "song_structures": {
+    "standard_house": {
+      "intro": "32 bars",
+      "verse": "32 bars",
+      "buildup": "16 bars",
+      "drop": "32 bars",
+      "breakdown": "32 bars",
+      "final_drop": "32 bars",
+      "outro": "16 bars"
+    },
+    "techno_continuous": {
+      "intro": "64 bars",
+      "main_groove": "128+ bars",
+      "evolution": "continuous",
+      "outro": "32 bars"
+    },
+    "progressive_epic": {
+      "intro": "64 bars",
+      "buildup_1": "32 bars",
+      "climax_1": "64 bars",
+      "breakdown": "64 bars",
+      "buildup_2": "32 bars",
+      "climax_2": "64 bars",
+      "outro": "32 bars"
+    }
+  },
+  "prompt_templates": {
+    "basic": "{genre}, {bpm} BPM, {key} key, {energy} energy, {keywords}",
+    "detailed": "{genre} track at {bpm} BPM in {key} key with {energy} energy. Features {characteristics}. Style: {keywords}",
+    "suno_optimized": "[{genre}] {keywords}, {bpm} BPM, {key}, {mood}, {structure}"
+  },
+  "energy_flow_patterns": {
+    "classic_set": {
+      "start": 2,
+      "peak": 5,
+      "end": 3,
+      "duration_minutes": 60,
+      "pattern": "gradual-rise-peak-gradual-fall"
+    },
+    "peak_time_set": {
+      "start": 4,
+      "peak": 5,
+      "end": 4,
+      "duration_minutes": 90,
+      "pattern": "high-energy-sustained-peak"
+    },
+    "chill_set": {
+      "start": 1,
+      "peak": 3,
+      "end": 2,
+      "duration_minutes": 60,
+      "pattern": "low-energy-slight-rise-gentle-fall"
+    }
+  },
+  "suno_v5_features": {
+    "max_duration": 240,
+    "recommended_structures": {
+      "short_2min": {
+        "duration_seconds": [120, 150],
+        "lyrics_lines": [12, 16],
+        "pattern": "[Verse] [Chorus] [Verse] [Chorus]",
+        "use_cases": ["Acid House", "Early Hardcore", "Electro House", "Hypertechno"]
+      },
+      "medium_3min": {
+        "duration_seconds": [150, 210],
+        "lyrics_lines": [20, 22],
+        "pattern": "[Intro] [Verse] [Chorus] [Verse] [Chorus] [Bridge] [Outro]",
+        "use_cases": ["Progressive House", "Tech House", "Melodic Techno", "French House"]
+      },
+      "long_4min": {
+        "duration_seconds": [210, 240],
+        "lyrics_lines": [22, 24],
+        "pattern": "[Intro] [Verse] [Chorus] [Verse] [Chorus] [Verse] [Chorus] [Outro]",
+        "use_cases": ["Uplifting Trance", "Big Room EDM", "Berghain Techno"]
+      }
+    }
+  },
+  "era_specific_tags": {
+    "1990s_early": {
+      "years": [1989, 1993],
+      "common_tags": ["[Main Loop]", "[Instant Drop]", "[Breakdown]"],
+      "audio_quality": ["Lo-fi", "Vintage recording", "Tape saturation", "Raw production"],
+      "philosophy": "repetition and trance states"
+    },
+    "1990s_late": {
+      "years": [1994, 1998],
+      "common_tags": ["[Layering Phase]", "[Long Outro]", "[First Climax - Restrained]", "[Middle Section - Breath]"],
+      "audio_quality": ["Warm analog", "Vintage compression", "Spacious reverb"],
+      "philosophy": "musical maturity and journey"
+    },
+    "2000s": {
+      "years": [1999, 2008],
+      "common_tags": ["[Micro Changes]", "[Extended]", "[The Breakdown - Extended]", "[Build Up]"],
+      "audio_quality": ["Digital clean", "Minimal processing", "Bitcrushed", "Overdriven"],
+      "philosophy": "extremes and subtraction"
+    },
+    "2010s_early": {
+      "years": [2009, 2013],
+      "common_tags": ["[The Drop]", "[Build Up]", "[Pre-Build]", "[Drop 2 - Bigger]"],
+      "audio_quality": ["Modern mastering", "Stadium energy", "Maximum loudness"],
+      "philosophy": "festival culture and commercial appeal"
+    },
+    "2010s_late": {
+      "years": [2014, 2018],
+      "common_tags": ["[Prologue]", "[Epilogue]", "[Climax]", "[Development - Emotional]"],
+      "audio_quality": ["Cinematic", "Professional mixing", "Emotional depth"],
+      "philosophy": "return to melody and storytelling"
+    },
+    "2020s": {
+      "years": [2019, 2026],
+      "common_tags": ["[Stutter]", "[Hyper]", "[Hook - Instant]", "[Drop - Hyper]"],
+      "audio_quality": ["Ultra clean", "Maximalist mastering", "Ultra compressed"],
+      "philosophy": "speed and social media optimization"
+    }
+  },
+  "genre_extensions": {
+    "Acid House": {
+      "era": "1990s_early",
+      "equipment": ["TB-303 squelch", "TR-909 drums", "hypnotic bassline"],
+      "section_tags": ["[Intro]", "[Build]", "[Main Loop]", "[Main Loop]", "[Main Loop]", "[Main Loop]", "[Breakdown]", "[Main Loop]", "[Main Loop]", "[Outro]"],
+      "audio_quality": ["Lo-fi", "Raw production", "Tape saturation"],
+      "typical_structure_seconds": 180,
+      "bpm_range": [120, 128],
+      "style_keywords": ["repetitive", "warehouse rave", "psychedelic"]
+    },
+    "Early Hardcore": {
+      "era": "1990s_early",
+      "equipment": ["Hoover synth", "breakbeat", "piano stabs"],
+      "section_tags": ["[Instant Drop]", "[First Round]", "[Fake Break]", "[Second Round - Harder]", "[Forced Stop]"],
+      "audio_quality": ["Bitcrushed", "Distorted", "Overdriven"],
+      "typical_structure_seconds": 180,
+      "bpm_range": [135, 150],
+      "style_keywords": ["energetic", "chaotic", "aggressive"]
+    },
+    "Progressive House": {
+      "era": "1990s_late",
+      "equipment": ["Roland Juno", "Atmospheric pads", "evolving bassline"],
+      "section_tags": ["[Intro - Deep]", "[Layering Phase]", "[First Climax - Restrained]", "[Middle Section - Breath]", "[Second Climax - Build]", "[Second Climax - Peak]", "[Long Outro]"],
+      "audio_quality": ["Warm", "Spacious reverb", "Professional mixing"],
+      "typical_structure_seconds": 480,
+      "bpm_range": [125, 130],
+      "style_keywords": ["atmospheric", "evolving", "journey", "deep bassline"]
+    },
+    "Big Beat": {
+      "era": "1990s_late",
+      "equipment": ["breakbeat", "distorted guitar", "funky samples"],
+      "section_tags": ["[Intro]", "[Verse]", "[Pre-Chorus]", "[Chorus - Drop]", "[Verse]", "[Chorus]", "[Bridge]", "[Final Chorus]", "[Outro]"],
+      "audio_quality": ["Vintage recording", "Overdriven", "Rock energy"],
+      "typical_structure_seconds": 210,
+      "bpm_range": [105, 115],
+      "style_keywords": ["rock energy", "funky", "aggressive"]
+    },
+    "Uplifting Trance": {
+      "era": "2000s",
+      "equipment": ["supersaw lead", "emotional synth", "arpeggios"],
+      "section_tags": ["[Intro]", "[Build Phase 1]", "[First Drop - Preview]", "[The Breakdown - Extended]", "[The Breakdown - Rising]", "[The Breakdown - Snare Roll]", "[True Climax - Drop]", "[True Climax - Peak]", "[Outro - Afterglow]"],
+      "audio_quality": ["Emotional processing", "Wide stereo", "Euphoric"],
+      "typical_structure_seconds": 360,
+      "bpm_range": [138, 142],
+      "style_keywords": ["emotional melody", "euphoric drop", "uplifting"]
+    },
+    "French House": {
+      "era": "2000s",
+      "equipment": ["Filter Disco", "phaser effect", "vocoder", "funky bassline"],
+      "section_tags": ["[Intro - Filtered]", "[Filter Opening]", "[Vocal Entry]", "[Filter Full Open]", "[Break - Drums Only]", "[Second Development]", "[Outro - Filtered]"],
+      "audio_quality": ["Funky", "Groovy", "Disco influence"],
+      "typical_structure_seconds": 210,
+      "bpm_range": [120, 128],
+      "style_keywords": ["groovy", "filtered", "disco"]
+    },
+    "Schranz": {
+      "era": "2000s",
+      "equipment": ["distorted kick", "industrial noise"],
+      "section_tags": ["[Intro - Industrial]", "[First Wave]", "[Peak]", "[Second Wave - Harder]", "[Outro - Relentless]"],
+      "audio_quality": ["Aggressive", "Overdriven", "Industrial"],
+      "typical_structure_seconds": 240,
+      "bpm_range": [140, 150],
+      "style_keywords": ["hard techno", "relentless", "aggressive"]
+    },
+    "Minimal Techno": {
+      "era": "2000s",
+      "equipment": ["deep sub bass", "microhouse", "organic textures"],
+      "section_tags": ["[Intro - Minimal]", "[Micro Changes]", "[Development - Subtle]", "[Same But Different]", "[Long Outro]"],
+      "audio_quality": ["Sparse", "Clean", "Minimal processing"],
+      "typical_structure_seconds": 600,
+      "bpm_range": [120, 128],
+      "style_keywords": ["sparse", "hypnotic", "minimal"]
+    },
+    "Electro House": {
+      "era": "2000s",
+      "equipment": ["distorted bassline", "disco stabs"],
+      "section_tags": ["[Instant Drop]", "[Main Riff]", "[Break]", "[Drop Return - Harder]", "[Middle]", "[Final Drop]", "[Outro - Sudden]"],
+      "audio_quality": ["Bitcrushed", "Overdriven", "Aggressive mastering", "Compressed"],
+      "typical_structure_seconds": 180,
+      "bpm_range": [126, 130],
+      "style_keywords": ["aggressive", "funky", "distorted"]
+    },
+    "Big Room EDM": {
+      "era": "2010s_early",
+      "equipment": ["massive synth lead", "sidechain compression", "emotional vocals"],
+      "section_tags": ["[Intro - Emotional]", "[Verse]", "[Pre-Build]", "[Build Up]", "[The Drop]", "[Verse 2]", "[Build Up 2]", "[Drop 2 - Bigger]", "[Bridge]", "[Outro - Piano]"],
+      "audio_quality": ["Stadium energy", "Maximum loudness", "Modern mastering"],
+      "typical_structure_seconds": 210,
+      "bpm_range": [126, 130],
+      "style_keywords": ["festival anthem", "massive drop", "euphoric"]
+    },
+    "Berghain Techno": {
+      "era": "2010s_early",
+      "equipment": ["cavernous reverb", "rumble kick", "industrial atmosphere"],
+      "section_tags": ["[Intro - Extended]", "[Layering - Slow]", "[Core - Hypnotic]", "[Core - Deep]", "[Reduction]", "[Outro - Space]"],
+      "audio_quality": ["Dark", "Underground", "Deep reverb"],
+      "typical_structure_seconds": 1200,
+      "bpm_range": [128, 134],
+      "style_keywords": ["dark", "industrial", "hypnotic"]
+    },
+    "Brostep": {
+      "era": "2010s_early",
+      "equipment": ["wobble bass", "metallic synth", "aggressive drop"],
+      "section_tags": ["[Intro - Atmospheric]", "[Build Up]", "[Wobble Drop]", "[Quiet Section]", "[Second Drop]", "[Final Drop - Maximum]", "[Outro - Cut]"],
+      "audio_quality": ["Heavy", "Aggressive", "Distorted"],
+      "typical_structure_seconds": 210,
+      "bpm_range": [140, 150],
+      "style_keywords": ["heavy", "aggressive", "dubstep"]
+    },
+    "Melodic Techno": {
+      "era": "2010s_late",
+      "equipment": ["arpeggios", "cinematic pads", "emotional synthesizer"],
+      "section_tags": ["[Prologue]", "[Introduction]", "[Development - Emotional]", "[Transformation]", "[Resolution - Climax]", "[Epilogue]"],
+      "audio_quality": ["Cinematic", "Emotional depth", "Professional mixing"],
+      "typical_structure_seconds": 360,
+      "bpm_range": [120, 126],
+      "style_keywords": ["cinematic atmosphere", "progressive journey", "emotional"]
+    },
+    "Tropical House": {
+      "era": "2010s_late",
+      "equipment": ["flute melody", "marimba", "snap beat"],
+      "section_tags": ["[Intro - Ocean]", "[Verse]", "[Chorus - Gentle]", "[Verse]", "[Chorus]", "[Bridge]", "[Final Chorus]", "[Outro - Waves]"],
+      "audio_quality": ["Relaxing", "Warm", "Summer vibes"],
+      "typical_structure_seconds": 180,
+      "bpm_range": [95, 110],
+      "style_keywords": ["summer vibes", "relaxing", "tropical"]
+    },
+    "Modern Tech House": {
+      "era": "2020s",
+      "equipment": ["dirty bassline", "catchy vocal hook", "groovy drums"],
+      "section_tags": ["[Hook - Instant]", "[Groove Build]", "[Vocal Development]", "[Break - Singalong]", "[Main - Chaotic]", "[Outro - Quick]"],
+      "audio_quality": ["Club banger", "Modern production", "Punchy"],
+      "typical_structure_seconds": 180,
+      "bpm_range": [124, 128],
+      "style_keywords": ["groovy", "catchy", "club"]
+    },
+    "Modern Hard Techno": {
+      "era": "2020s",
+      "equipment": ["rumble kick", "rave stabs", "TB-303"],
+      "section_tags": ["[Declaration]", "[First Wave]", "[Break - Short]", "[Second Wave - Harder]", "[Rapid Outro]"],
+      "audio_quality": ["Peak Time", "Aggressive", "Modern"],
+      "typical_structure_seconds": 180,
+      "bpm_range": [140, 148],
+      "style_keywords": ["aggressive", "peak time", "rave"]
+    },
+    "Hypertechno": {
+      "era": "2020s",
+      "equipment": ["donk bass", "eurodance synth", "emotional vocals"],
+      "section_tags": ["[Intro - Piano]", "[Build - Emotional]", "[Drop - Hyper]", "[Break - Piano]", "[Final Drop]", "[Outro - Sudden]"],
+      "audio_quality": ["Ultra compressed", "Nostalgic processing", "Very fast tempo"],
+      "typical_structure_seconds": 120,
+      "bpm_range": [150, 160],
+      "style_keywords": ["eurodance nostalgia", "very fast tempo", "emotional"]
+    },
+    "Stutter House": {
+      "era": "2020s",
+      "equipment": ["chopped vocals", "stutter effect"],
+      "section_tags": ["[Stutter - Instant]", "[Groove - Chopped]", "[Second Vocal - Layered]", "[Break - Clean]", "[Full Drop - Chaos]", "[Outro - Slowdown]"],
+      "audio_quality": ["Energetic", "Modern", "Processed"],
+      "typical_structure_seconds": 150,
+      "bpm_range": [135, 145],
+      "style_keywords": ["catchy hook", "energetic", "chopped"]
+    },
+    "Hard Groove": {
+      "era": "2020s",
+      "equipment": ["funky loops", "tribal percussion", "rolling bassline"],
+      "section_tags": ["[Intro - Tribal]", "[First Groove]", "[Build]", "[Peak Groove]", "[Outro - Rolling]"],
+      "audio_quality": ["Fast paced", "90s influence", "Groovy"],
+      "typical_structure_seconds": 210,
+      "bpm_range": [138, 145],
+      "style_keywords": ["funky", "tribal", "fast paced", "90s influence"]
+    }
+  }
+}
