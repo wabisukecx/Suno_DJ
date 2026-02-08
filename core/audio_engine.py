@@ -1,10 +1,12 @@
 """
-Audio Engine (Phase 8L: 4-Bar Loop Implementation)
-==================================================
+Audio Engine (Phase 8L + EQ Upgrade + Loop Upgrade)
+====================================================
 Updates:
-- Added BASS_SYNC definitions and Ctypes callback (SYNCPROC).
-- Implemented set_loop/clear_loop in Deck class.
-- Enables seamless looping using BASS_SYNC_POS | BASS_SYNC_MIXTIME.
+- EQ Upgrade: 3-stage DX8 ParamEQ cascade for DJ-grade kill EQ (-45dB max)
+- Loop Upgrade: Improved beat-snapped looping with floor() snap and enhanced first_beat detection
+- Added BASS_SYNC definitions and Ctypes callback (SYNCPROC)
+- Implemented set_loop/clear_loop/set_loop_snapped in Deck class
+- Enables seamless looping using BASS_SYNC_POS | BASS_SYNC_MIXTIME
 """
 
 import logging
@@ -85,11 +87,10 @@ class BASS_BFX_BQF(ctypes.Structure):
     ]
 
 # Callback type for Sync (Looping)
-# void CALLBACK SyncProc(HSYNC handle, DWORD channel, DWORD data, void *user);
 SYNCPROC = ctypes.CFUNCTYPE(None, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p)
 
+# --- BASS Library Initialization ---
 try:
-    # プロジェクトルート（coreの親ディレクトリ）を基準にする
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     if platform.system() == 'Windows' and hasattr(os, 'add_dll_directory'):
@@ -116,6 +117,7 @@ try:
         BASS_LIB.BASS_ChannelGetLength.restype = ctypes.c_uint64
         BASS_LIB.BASS_ChannelGetPosition.restype = ctypes.c_uint64
         BASS_LIB.BASS_ChannelBytes2Seconds.restype = ctypes.c_double
+        BASS_LIB.BASS_ChannelIsActive.restype = ctypes.c_uint32
         
         # FX & Sync
         BASS_LIB.BASS_ChannelSetFX.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_int]
@@ -138,26 +140,25 @@ try:
         BASS_LIB.BASS_PluginLoad.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32]
         BASS_LIB.BASS_PluginLoad.restype = ctypes.c_uint32
 
+        BASS_LIB.BASS_ChannelGetData.argtypes = [ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32]
+        BASS_LIB.BASS_ChannelGetData.restype = ctypes.c_int
+
         if BASS_LIB.BASS_Init(-1, 48000, 0, 0, 0):
             BASS_AVAILABLE = True
             logger.info("BASS Output Driver Initialized.")
         else:
-            logger.error(f"BASS Init Failed: {BASS_LIB.BASS_ErrorGetCode()}")
-
-    # Load BASS_FX (Phase 9.1: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾LoadLibraryÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¥ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â)
-    if BASS_AVAILABLE and os.path.exists(bass_fx_path):
+            logger.error(f"BASS_Init failed: Error {BASS_LIB.BASS_ErrorGetCode()}")
+    
+    # BASS_FX
+    if os.path.exists(bass_fx_path) and BASS_AVAILABLE:
         try:
-            # BASS_FXÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â«ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸DLLÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂºÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â´ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â½ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â°(BASS_PluginLoadÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂªÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾)
             BASS_FX_LIB = DLL_LOADER(bass_fx_path)
-            
-            # BASS_FXÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â®ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¥ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¥ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â®ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©
             BASS_FX_LIB.BASS_FX_GetVersion.restype = ctypes.c_uint32
             BASS_FX_LIB.BASS_FX_TempoCreate.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
             BASS_FX_LIB.BASS_FX_TempoCreate.restype = ctypes.c_uint32
             BASS_FX_LIB.BASS_FX_TempoGetRateRatio.argtypes = [ctypes.c_uint32]
             BASS_FX_LIB.BASS_FX_TempoGetRateRatio.restype = ctypes.c_float
             
-            # ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂºÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂªÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â
             version = BASS_FX_LIB.BASS_FX_GetVersion()
             BASS_FX_AVAILABLE = True
             logger.info(f"BASS_FX Loaded Successfully (Version: {hex(version)}, Tempo Support Active)")
@@ -176,6 +177,7 @@ class AudioConfig:
     channels: int = 2
     block_size: int = 2048
 
+
 class Deck:
     def __init__(self, name: str, config: AudioConfig):
         self.name = name
@@ -187,7 +189,7 @@ class Deck:
         self.waveform_cache = None
         
         # Track Analysis Data
-        self.original_bpm = 0.0  # Ã¨Â§Â£Ã¦Å¾ÂÃ¦â„¢â€šÃ£ÂÂ®BPMÃ¯Â¼Ë†SyncÃ¨Â¨Ë†Ã§Â®â€”Ã§â€Â¨Ã¯Â¼â€°
+        self.original_bpm = 0.0
         
         self.channel_volume = 1.0
         self.mix_volume = 1.0
@@ -200,19 +202,22 @@ class Deck:
         self.tempo_percent = 0.0
         self.pitch_semitones = 0.0
         
-        self.fx_eq_low = 0
-        self.fx_eq_mid = 0
-        self.fx_eq_high = 0
+        # EQ Upgrade: 3-stage cascade handles
+        self.fx_eq_low = []   # 3-stage cascade handles
+        self.fx_eq_mid = []   # 3-stage cascade handles
+        self.fx_eq_high = []  # 3-stage cascade handles
         self.fx_filter = 0
         
-        # Loop State
+        # Loop State + Loop Upgrade
         self.loop_active = False
         self.loop_sync_handle = 0
         self.loop_start_bytes = 0
-        self.loop_cb_ref = None # Keep reference to callback to prevent GC
+        self.loop_cb_ref = None
+        self.loop_start_sec = 0.0     # Loop Upgrade: スナップ済みループ開始位置(秒)
+        self.loop_duration_sec = 0.0  # Loop Upgrade: ループ長(秒)
         
-        # HOT CUE State (Phase 8C)
-        self.hot_cues: list[Optional[float]] = [None] * 4  # 4 slots, in seconds
+        # HOT CUE State
+        self.hot_cues: list[Optional[float]] = [None] * 4
         
         self.on_load_complete = None
 
@@ -257,47 +262,71 @@ class Deck:
 
     def unload(self):
         self.clear_loop()
-        self.clear_all_hot_cues()  # HOT CUEÃ£â€šâ€šÃ£â€šÂ¯Ã£Æ’ÂªÃ£â€šÂ¢
+        self.clear_all_hot_cues()
         if self.stream_fx and self.stream_fx != self.stream_decode: BASS_LIB.BASS_StreamFree(self.stream_fx)
         if self.stream_decode: BASS_LIB.BASS_StreamFree(self.stream_decode)
         self.stream_decode = 0; self.stream_fx = 0
         self.duration = 0.0; self.waveform_cache = None
+        # EQ Upgrade: リスト型に対応
+        self.fx_eq_low = []; self.fx_eq_mid = []; self.fx_eq_high = []
 
     def _setup_dsp(self):
         if not self.stream_fx: return
         
-        # Single DX8 EQ (Clean Audio)
-        self.fx_eq_low = BASS_LIB.BASS_ChannelSetFX(self.stream_fx, BASS_FX_DX8_PARAMEQ, 0)
-        self.fx_eq_mid = BASS_LIB.BASS_ChannelSetFX(self.stream_fx, BASS_FX_DX8_PARAMEQ, 0)
-        self.fx_eq_high = BASS_LIB.BASS_ChannelSetFX(self.stream_fx, BASS_FX_DX8_PARAMEQ, 0)
+        # EQ Upgrade: 3-Stage Cascade DX8 EQ (DJ-grade kill EQ)
+        # 各バンド3段重ね: -15dB × 3 = -45dB max attenuation
+        EQ_CASCADE_STAGES = 3
         
-        self._update_dx8_eq(self.fx_eq_low, 100.0, 18.0, self.eq_low)
-        self._update_dx8_eq(self.fx_eq_mid, 1000.0, 18.0, self.eq_mid)
-        self._update_dx8_eq(self.fx_eq_high, 8000.0, 18.0, self.eq_high)
+        self.fx_eq_low = []
+        self.fx_eq_mid = []
+        self.fx_eq_high = []
+        
+        for _ in range(EQ_CASCADE_STAGES):
+            h_low = BASS_LIB.BASS_ChannelSetFX(self.stream_fx, BASS_FX_DX8_PARAMEQ, 0)
+            h_mid = BASS_LIB.BASS_ChannelSetFX(self.stream_fx, BASS_FX_DX8_PARAMEQ, 0)
+            h_high = BASS_LIB.BASS_ChannelSetFX(self.stream_fx, BASS_FX_DX8_PARAMEQ, 0)
+            if h_low: self.fx_eq_low.append(h_low)
+            if h_mid: self.fx_eq_mid.append(h_mid)
+            if h_high: self.fx_eq_high.append(h_high)
+        
+        # Initialize all stages with DJ-standard crossover frequencies
+        # (based on Mixxx's default EQ settings)
+        for h in self.fx_eq_low:
+            self._update_dx8_eq(h, 246.0, 8.0, self.eq_low)  # Low: 246Hz (DJ standard)
+        for h in self.fx_eq_mid:
+            self._update_dx8_eq(h, 2500.0, 12.0, self.eq_mid)  # Mid: 2.5kHz (DJ standard)
+        for h in self.fx_eq_high:
+            self._update_dx8_eq(h, 10000.0, 8.0, self.eq_high)  # High: 10kHz (same)
 
         if BASS_FX_AVAILABLE:
             self.fx_filter = BASS_LIB.BASS_ChannelSetFX(self.stream_fx, BASS_FX_BFX_BQF, 0)
+        
+        logger.debug(f"Deck {self.name}: EQ Setup - {len(self.fx_eq_low)}x3 cascade stages")
 
     def _update_dx8_eq(self, handle, center, bw, gain):
         if not handle: return
+        # カスケードでゲインが3倍になるため、1段あたりは控えめに
         safe_gain = max(-15.0, min(15.0, gain))
         p = BASS_DX8_PARAMEQ(center, bw, safe_gain)
         BASS_LIB.BASS_FXSetParameters(handle, ctypes.byref(p))
 
     def set_eq_low(self, db: float):
         self.eq_low = db
-        if abs(db) > 1.0: logger.info(f"Deck {self.name} Low: {db:.1f}dB") 
-        self._update_dx8_eq(self.fx_eq_low, 100.0, 18.0, db)
+        if abs(db) > 1.0: logger.info(f"Deck {self.name} Low: {db:.1f}dB (x{len(self.fx_eq_low)} cascade)") 
+        for h in self.fx_eq_low:
+            self._update_dx8_eq(h, 246.0, 8.0, db)  # 246Hz (DJ standard)
 
     def set_eq_mid(self, db: float):
         self.eq_mid = db
-        if abs(db) > 1.0: logger.info(f"Deck {self.name} Mid: {db:.1f}dB")
-        self._update_dx8_eq(self.fx_eq_mid, 1000.0, 18.0, db)
+        if abs(db) > 1.0: logger.info(f"Deck {self.name} Mid: {db:.1f}dB (x{len(self.fx_eq_mid)} cascade)")
+        for h in self.fx_eq_mid:
+            self._update_dx8_eq(h, 2500.0, 12.0, db)  # 2.5kHz (DJ standard)
 
     def set_eq_high(self, db: float):
         self.eq_high = db
-        if abs(db) > 1.0: logger.info(f"Deck {self.name} High: {db:.1f}dB")
-        self._update_dx8_eq(self.fx_eq_high, 8000.0, 18.0, db)
+        if abs(db) > 1.0: logger.info(f"Deck {self.name} High: {db:.1f}dB (x{len(self.fx_eq_high)} cascade)")
+        for h in self.fx_eq_high:
+            self._update_dx8_eq(h, 10000.0, 8.0, db)  # 10kHz
 
     def set_filter(self, val: float):
         self.filter_val = val
@@ -308,118 +337,110 @@ class Deck:
             p.lFilter = BASS_BFX_BQF_LOWPASS; p.fCenter = 20000.0; p.fQ = 0.707
         elif val < 0: # LPF
             p.lFilter = BASS_BFX_BQF_LOWPASS
-            p.fCenter = max(100.0, 20000.0 * (0.01 ** abs(val)))
+            p.fCenter = max(100.0, 20000.0 + val * 19800.0)
+            p.fQ = 0.707
         else: # HPF
             p.lFilter = BASS_BFX_BQF_HIGHPASS
-            p.fCenter = min(15000.0, 20.0 * (500.0 ** val))
-            
+            p.fCenter = min(10000.0, 20.0 + val * 9980.0)
+            p.fQ = 0.707
+        
         BASS_LIB.BASS_FXSetParameters(self.fx_filter, ctypes.byref(p))
+
+    def set_tempo(self, percent: float):
+        self.tempo_percent = max(-50.0, min(50.0, percent))
+        if self.stream_fx and BASS_FX_AVAILABLE:
+            BASS_LIB.BASS_ChannelSetAttribute(self.stream_fx, BASS_ATTRIB_TEMPO, self.tempo_percent)
+
+    def set_pitch(self, semitones: float):
+        self.pitch_semitones = max(-12.0, min(12.0, semitones))
+        if self.stream_fx and BASS_FX_AVAILABLE:
+            BASS_LIB.BASS_ChannelSetAttribute(self.stream_fx, BASS_ATTRIB_TEMPO_PITCH, self.pitch_semitones)
 
     def set_volume(self, v: float):
         self.channel_volume = max(0.0, min(1.0, v))
         self._update_volume()
-    
-    def set_master_volume_coeff(self, v: float):
-        self.mix_volume = v
+
+    def set_trim(self, db: float):
+        self.trim_db = max(-10.0, min(10.0, db))
+        self._update_volume()
+
+    def set_master_volume_coeff(self, coeff: float):
+        self.mix_volume = coeff
         self._update_volume()
 
     def _update_volume(self):
         if not self.stream_fx: return
-        trim_linear = 10 ** (self.trim_db / 20.0)
-        final_vol = trim_linear * self.channel_volume * self.mix_volume
-        BASS_LIB.BASS_ChannelSetAttribute(self.stream_fx, BASS_ATTRIB_VOL, ctypes.c_float(final_vol))
-    
-    def set_trim(self, db: float): self.trim_db = db; self._update_volume()
-    
-    def set_tempo(self, percent: float):
-        if self.stream_fx and BASS_FX_AVAILABLE:
-            BASS_LIB.BASS_ChannelSetAttribute(self.stream_fx, BASS_ATTRIB_TEMPO, ctypes.c_float(percent))
-            self.tempo_percent = percent
-    
-    def set_pitch(self, semitones: float):
-        if self.stream_fx and BASS_FX_AVAILABLE:
-            BASS_LIB.BASS_ChannelSetAttribute(self.stream_fx, BASS_ATTRIB_TEMPO_PITCH, ctypes.c_float(semitones))
-            self.pitch_semitones = semitones
-    
-    def sync_tempo_to(self, target_bpm: float) -> bool:
-        """
-        Ã¥Â¯Â¾Ã¥Ââ€˜Ã£Æ’â€¡Ã£Æ’Æ’Ã£â€šÂ­Ã£ÂÂ®BPMÃ£ÂÂ«Ã¥ÂÅ’Ã¦Å“Å¸Ã¯Â¼Ë†BPM SyncÃ¯Â¼â€°
-        Args:
-            target_bpm: Ã§â€ºÂ®Ã¦Â¨â„¢BPMÃ¯Â¼Ë†Ã¥Â¯Â¾Ã¥Ââ€˜Ã£Æ’â€¡Ã£Æ’Æ’Ã£â€šÂ­Ã£ÂÂ®BPMÃ¯Â¼â€°
-        Returns:
-            Ã¦Ë†ÂÃ¥Å Å¸Ã¦â„¢â€šTrueÃ£â‚¬ÂÃ¥Â¤Â±Ã¦â€¢â€”Ã¦â„¢â€šFalse
-        """
-        if not self.stream_fx or not BASS_FX_AVAILABLE:
-            logger.warning(f"Deck {self.name}: Cannot sync - BASS_FX not available")
+        trim_linear = 10.0 ** (self.trim_db / 20.0)
+        final_vol = self.channel_volume * trim_linear * self.mix_volume
+        BASS_LIB.BASS_ChannelSetAttribute(self.stream_fx, BASS_ATTRIB_VOL, final_vol)
+
+    def play(self):
+        if self.stream_fx: BASS_LIB.BASS_ChannelPlay(self.stream_fx, False)
+
+    def pause(self):
+        if self.stream_fx: BASS_LIB.BASS_ChannelPause(self.stream_fx)
+
+    def stop(self):
+        if self.stream_fx:
+            BASS_LIB.BASS_ChannelPause(self.stream_fx)
+            BASS_LIB.BASS_ChannelSetPosition(self.stream_fx, 0, BASS_POS_BYTE)
+
+    def cue(self):
+        if self.stream_fx:
+            BASS_LIB.BASS_ChannelSetPosition(self.stream_fx, 0, BASS_POS_BYTE)
+            BASS_LIB.BASS_ChannelPause(self.stream_fx)
+
+    def is_playing(self) -> bool:
+        if not self.stream_fx: return False
+        return BASS_LIB.BASS_ChannelIsActive(self.stream_fx) == 1
+
+    def get_position(self) -> float:
+        if not self.stream_fx: return 0.0
+        pos_bytes = BASS_LIB.BASS_ChannelGetPosition(self.stream_fx, BASS_POS_BYTE)
+        return BASS_LIB.BASS_ChannelBytes2Seconds(self.stream_fx, pos_bytes)
+
+    def get_duration(self) -> float:
+        return self.duration
+
+    def get_waveform_data(self, num_points=800):
+        return self.waveform_cache
+
+    def set_position(self, seconds: float):
+        if not self.stream_fx: return
+        pos_bytes = BASS_LIB.BASS_ChannelSeconds2Bytes(self.stream_fx, seconds)
+        BASS_LIB.BASS_ChannelSetPosition(self.stream_fx, pos_bytes, BASS_POS_BYTE)
+
+    def sync_bpm(self, target_bpm: float) -> bool:
+        if not BASS_FX_AVAILABLE or self.original_bpm <= 0:
             return False
-        
-        if self.original_bpm <= 0:
-            logger.warning(f"Deck {self.name}: Cannot sync - original BPM not set")
-            return False
-        
-        if target_bpm <= 0:
-            logger.warning(f"Deck {self.name}: Cannot sync - invalid target BPM: {target_bpm}")
-            return False
-        
-        # Ã£Æ’â€ Ã£Æ’Â³Ã£Æ’ÂÃ¨ÂªÂ¿Ã¦â€¢Â´Ã©â€¡ÂÃ£â€šâ€™Ã¨Â¨Ë†Ã§Â®â€”: ((target / source) - 1.0) * 100
         tempo_adjust = ((target_bpm / self.original_bpm) - 1.0) * 100.0
-        
-        # BASSÃ£ÂÂ®Ã¥Ë†Â¶Ã©â„¢Â: -50%Ã£â‚¬Å“+50%
         tempo_adjust = max(-50.0, min(50.0, tempo_adjust))
-        
         self.set_tempo(tempo_adjust)
-        
         logger.info(f"Deck {self.name}: Synced to {target_bpm:.1f} BPM "
                    f"(Original: {self.original_bpm:.1f}, Adjust: {tempo_adjust:+.1f}%)")
         return True
 
-    def get_position(self) -> float:
-        if not self.stream_fx: return 0.0
-        pos = BASS_LIB.BASS_ChannelGetPosition(self.stream_fx, BASS_POS_BYTE)
-        return BASS_LIB.BASS_ChannelBytes2Seconds(self.stream_fx, pos) if pos != -1 else 0.0
-    
-    def get_duration(self) -> float: return self.duration
-    def get_waveform_data(self, num_points=100) -> Optional[np.ndarray]: return self.waveform_cache
-    def get_dsp_settings(self):
-        return {
-            'type': "DX8(Single)",
-            'eq_high': f"{self.eq_high:.1f}dB",
-            'eq_mid': f"{self.eq_mid:.1f}dB",
-            'eq_low': f"{self.eq_low:.1f}dB",
-        }
-    
-    def apply_track_analysis(self, analysis: dict):
-        """Ã£Æ’Ë†Ã£Æ’Â©Ã£Æ’Æ’Ã£â€šÂ¯Ã¨Â§Â£Ã¦Å¾ÂÃ§ÂµÂÃ¦Å¾Å“Ã£â€šâ€™Ã©ÂÂ©Ã§â€Â¨"""
-        if 'auto_gain' in analysis:
-            self.set_trim(analysis['auto_gain'])
-        if 'bpm' in analysis:
-            self.original_bpm = analysis['bpm']
-            logger.debug(f"Deck {self.name}: Original BPM set to {self.original_bpm}")
-
     # --- Loop Implementation ---
     def set_loop(self, start_pos: float, duration: float):
         """Set a seamless loop using BASS_ChannelSetSync"""
-        if not self.stream_fx: return
+        if not self.stream_fx:
+            logger.warning(f"Deck {self.name}: No stream loaded")
+            return
         
-        # Clear existing loop
         self.clear_loop()
         
-        # Calculate bytes
+        # ループ終了位置（調整なし - BASS_SYNC_MIXTIMEが正確に動作）
         end_pos = start_pos + duration
+        
         start_bytes = BASS_LIB.BASS_ChannelSeconds2Bytes(self.stream_fx, ctypes.c_double(start_pos))
         end_bytes = BASS_LIB.BASS_ChannelSeconds2Bytes(self.stream_fx, ctypes.c_double(end_pos))
         
         self.loop_start_bytes = start_bytes
         
-        # Define callback logic
-        # IMPORTANT: We must keep a reference to the SYNCPROC object (self.loop_cb_ref)
-        # otherwise garbage collector kills it and BASS crashes.
-        def loop_sync_proc(handle, channel, data, user):
+        def loop_callback(handle, channel, data, user):
             BASS_LIB.BASS_ChannelSetPosition(channel, self.loop_start_bytes, BASS_POS_BYTE)
-
-        self.loop_cb_ref = SYNCPROC(loop_sync_proc)
         
-        # Set Sync: BASS_SYNC_POS | BASS_SYNC_MIXTIME (Mixtime ensures gapless loop)
+        self.loop_cb_ref = SYNCPROC(loop_callback)
         self.loop_sync_handle = BASS_LIB.BASS_ChannelSetSync(
             self.stream_fx,
             BASS_SYNC_POS | BASS_SYNC_MIXTIME,
@@ -430,149 +451,131 @@ class Deck:
         
         if self.loop_sync_handle:
             self.loop_active = True
-            logger.info(f"Deck {self.name}: Loop SET (Start: {start_pos:.1f}s, Dur: {duration:.1f}s)")
+            logger.info(f"Deck {self.name}: Loop set {start_pos:.2f}s - {end_pos:.2f}s (duration: {duration:.2f}s)")
         else:
-            logger.error(f"Deck {self.name}: Loop Set Failed (Error {BASS_LIB.BASS_ErrorGetCode()})")
+            logger.error(f"Deck {self.name}: Loop sync failed, Error: {BASS_LIB.BASS_ErrorGetCode()}")
 
     def clear_loop(self):
-        """Disable loop"""
-        if self.loop_sync_handle and self.stream_fx:
+        if self.loop_sync_handle:
             BASS_LIB.BASS_ChannelRemoveSync(self.stream_fx, self.loop_sync_handle)
             self.loop_sync_handle = 0
             self.loop_active = False
             self.loop_cb_ref = None
-            logger.info(f"Deck {self.name}: Loop CLEARED")
-    
+            logger.info(f"Deck {self.name}: Loop cleared")
+
     def set_loop_snapped(self, bpm: float, first_beat: float = 0.0, bars: int = 4):
         """
-        Ã§ÂÂ¾Ã¥Å“Â¨Ã¤Â½ÂÃ§Â½Â®Ã£â€šâ€™Ã¦Å“â‚¬Ã¥Â¯â€žÃ£â€šÅ Ã£ÂÂ®Ã¥Â°ÂÃ§Â¯â‚¬Ã©Â Â­Ã£ÂÂ«Ã£â€šÂ¹Ã£Æ’Å Ã£Æ’Æ’Ã£Æ’â€”Ã£Ââ€”Ã£ÂÂ¦Ã£Æ’Â«Ã£Æ’Â¼Ã£Æ’â€”Ã¨Â¨Â­Ã¥Â®Å¡Ã¯Â¼Ë†Phase 8C Week 3Ã¯Â¼â€°
+        Loop Upgrade: ビートグリッドにスナップした4小節ループを設定
         
-        Args:
-            bpm: Ã£Æ’Ë†Ã£Æ’Â©Ã£Æ’Æ’Ã£â€šÂ¯Ã£ÂÂ®BPM
-            first_beat: Ã¦Å“â‚¬Ã¥Ë†ÂÃ£ÂÂ®Ã£Æ’â€œÃ£Æ’Â¼Ã£Æ’Ë†Ã¤Â½ÂÃ§Â½Â®Ã¯Â¼Ë†Ã§Â§â€™Ã¯Â¼â€°
-            bars: Ã£Æ’Â«Ã£Æ’Â¼Ã£Æ’â€”Ã£ÂÂ®Ã¥Â°ÂÃ§Â¯â‚¬Ã¦â€¢Â°Ã¯Â¼Ë†Ã£Æ’â€¡Ã£Æ’â€¢Ã£â€šÂ©Ã£Æ’Â«Ã£Æ’Ë†4Ã¯Â¼â€°
+        改善点:
+        - floor() で「今鳴っている小節」の頭にスナップ (round→floor)
+        - ループ開始/長さを属性に保存し外部から参照可能に
+        - first_beatが不正な場合のフォールバック強化
+        - ビートグリッド位置のバリデーション追加
         """
         if not self.stream_fx:
             return
         
+        # BPMフォールバック
         if bpm <= 0:
-            logger.warning(f"Deck {self.name}: Cannot snap loop - invalid BPM: {bpm}")
-            # Ã£Æ’â€¢Ã£â€šÂ©Ã£Æ’Â¼Ã£Æ’Â«Ã£Æ’ÂÃ£Æ’Æ’Ã£â€šÂ¯: Ã©â‚¬Å¡Ã¥Â¸Â¸Ã£ÂÂ®Ã£Æ’Â«Ã£Æ’Â¼Ã£Æ’â€”Ã¨Â¨Â­Ã¥Â®Å¡
-            loop_duration = 960.0 / 120.0  # 4Ã¥Â°ÂÃ§Â¯â‚¬@120BPM
-            current = self.get_position()
-            self.set_loop(current, loop_duration)
-            return
+            logger.warning(f"Deck {self.name}: Invalid BPM ({bpm}), using 120.0")
+            bpm = 120.0
         
-        # 1Ã¥Â°ÂÃ§Â¯â‚¬ = 4Ã¦â€¹Â = (60 / BPM) * 4 Ã§Â§â€™
-        bar_duration = (60.0 / bpm) * 4
-        
-        # Ã§ÂÂ¾Ã¥Å“Â¨Ã¤Â½ÂÃ§Â½Â®Ã£â€šâ€™Ã¥Ââ€“Ã¥Â¾â€”
-        current = self.get_position()
-        
-        # Ã§ÂÂ¾Ã¥Å“Â¨Ã¤Â½ÂÃ§Â½Â®Ã£ÂÅ’first_beatÃ£Ââ€¹Ã£â€šâ€°Ã£ÂÂ©Ã£â€šÅ’Ã£ÂÂ Ã£Ââ€˜Ã§ÂµÅ’Ã©ÂÅ½Ã£Ââ€”Ã£ÂÂ¦Ã£Ââ€žÃ£â€šâ€¹Ã£Ââ€¹
-        elapsed_from_first = current - first_beat
-        
-        # Ã§ÂµÅ’Ã©ÂÅ½Ã¦â„¢â€šÃ©â€“â€œÃ£â€šâ€™Ã¥Â°ÂÃ§Â¯â‚¬Ã¦â€¢Â°Ã£ÂÂ«Ã¥Â¤â€°Ã¦Ââ€º
-        bars_elapsed = elapsed_from_first / bar_duration
-        
-        # Ã¦Å“â‚¬Ã¥Â¯â€žÃ£â€šÅ Ã£ÂÂ®Ã¥Â°ÂÃ§Â¯â‚¬Ã©Â Â­Ã£ÂÂ«Ã¤Â¸Â¸Ã£â€šÂÃ£â€šâ€¹
-        nearest_bar = round(bars_elapsed)
-        
-        # Ã£â€šÂ¹Ã£Æ’Å Ã£Æ’Æ’Ã£Æ’â€”Ã¤Â½ÂÃ§Â½Â®Ã£â€šâ€™Ã¨Â¨Ë†Ã§Â®â€”
-        snap_pos = first_beat + (nearest_bar * bar_duration)
-        snap_pos = max(0.0, snap_pos)  # Ã¨Â²Â Ã£ÂÂ®Ã¥â‚¬Â¤Ã£ÂÂ«Ã£ÂÂªÃ£â€šâ€°Ã£ÂÂªÃ£Ââ€žÃ£â€šË†Ã£Ââ€ Ã£ÂÂ«
-        
-        # Ã£Æ’Â«Ã£Æ’Â¼Ã£Æ’â€”Ã©â€¢Â·Ã£Ââ€¢ = Ã¦Å’â€¡Ã¥Â®Å¡Ã¥Â°ÂÃ§Â¯â‚¬Ã¦â€¢Â°Ã¥Ë†â€ 
+        beat_duration = 60.0 / bpm
+        bar_duration = beat_duration * 4  # 4/4拍子前提
         loop_duration = bar_duration * bars
         
-        # Ã£Æ’Â«Ã£Æ’Â¼Ã£Æ’â€”Ã¨Â¨Â­Ã¥Â®Å¡
-        self.set_loop(snap_pos, loop_duration)
+        current = self.get_position()
         
-        logger.info(f"Deck {self.name}: Loop SNAPPED to bar {nearest_bar:.0f} "
-                   f"(Position: {snap_pos:.2f}s, Duration: {loop_duration:.2f}s, BPM: {bpm:.1f})")
+        # first_beatバリデーション: 負値や曲尺超えは無効
+        if first_beat < 0 or first_beat > self.duration:
+            logger.warning(f"Deck {self.name}: Invalid first_beat ({first_beat:.3f}s), resetting to 0.0")
+            first_beat = 0.0
+        
+        # ビートグリッドからの経過を計算
+        if current >= first_beat:
+            elapsed = current - first_beat
+            # floor: 「今いる小節」の頭にスナップ (roundだと次の小節に飛ぶ場合がある)
+            bar_index = int(elapsed / bar_duration)  # int() = floor for positive values
+            snap_start = first_beat + (bar_index * bar_duration)
+            
+            # デバッグ情報
+            logger.info(f"Deck {self.name} Loop Snap Debug:")
+            logger.info(f"  Current position: {current:.3f}s")
+            logger.info(f"  First beat: {first_beat:.3f}s")
+            logger.info(f"  Elapsed from first beat: {elapsed:.3f}s")
+            logger.info(f"  Bar duration: {bar_duration:.3f}s ({beat_duration:.3f}s × 4)")
+            logger.info(f"  Bar index (floor): {bar_index}")
+            logger.info(f"  Snap start: {snap_start:.3f}s")
+            logger.info(f"  Expected bars in loop: 0={first_beat:.3f}s, 1={first_beat + bar_duration:.3f}s, 2={first_beat + bar_duration*2:.3f}s, 3={first_beat + bar_duration*3:.3f}s")
+        else:
+            # 再生位置がfirst_beatより前 (イントロ等)
+            # first_beatからのループにする
+            snap_start = first_beat
+        
+        # スナップ位置のバリデーション
+        snap_start = max(0.0, snap_start)
+        
+        # ループ終了が曲尾を超える場合、開始位置を手前にずらす
+        if self.duration > 0 and (snap_start + loop_duration) > self.duration:
+            # 曲末から逆算して最後の完全なN小節区間を取る
+            total_bars = int((self.duration - first_beat) / bar_duration)
+            if total_bars >= bars:
+                snap_start = first_beat + ((total_bars - bars) * bar_duration)
+            else:
+                # 曲が短すぎる場合、曲頭から
+                snap_start = first_beat
+        
+        # Loop Upgrade: ループ開始/長さを属性に保存 (外部参照用)
+        self.loop_start_sec = snap_start
+        self.loop_duration_sec = loop_duration
+        
+        # ループ設定
+        self.set_loop(snap_start, loop_duration)
+        
+        logger.info(f"Deck {self.name}: Loop SNAPPED to bar {int((snap_start - first_beat) / bar_duration):.0f} "
+                   f"(Start: {snap_start:.3f}s, Duration: {loop_duration:.3f}s, "
+                   f"BPM: {bpm:.1f}, FirstBeat: {first_beat:.3f}s)")
 
-    # --- HOT CUE Functions (Phase 8C) ---
-    
-    def set_hot_cue(self, slot: int, position: Optional[float] = None):
-        """
-        Set HOT CUE point
-        Args:
-            slot: CUE slot number (0-3)
-            position: Position in seconds (None = current position)
-        """
-        if slot < 0 or slot >= 4:
-            logger.warning(f"Deck {self.name}: Invalid HOT CUE slot {slot}")
-            return
-        
-        if not self.stream_fx:
-            logger.warning(f"Deck {self.name}: Cannot set HOT CUE - no track loaded")
-            return
-        
-        pos = position if position is not None else self.get_position()
-        self.hot_cues[slot] = pos
-        logger.info(f"Deck {self.name}: HOT CUE {slot+1} set at {pos:.2f}s")
-    
-    def trigger_hot_cue(self, slot: int):
-        """
-        Trigger HOT CUE (jump to position and play)
-        Args:
-            slot: CUE slot number (0-3)
-        """
-        if slot < 0 or slot >= 4:
-            logger.warning(f"Deck {self.name}: Invalid HOT CUE slot {slot}")
-            return
-        
-        if self.hot_cues[slot] is None:
-            logger.debug(f"Deck {self.name}: HOT CUE {slot+1} not set")
-            return
-        
-        cue_pos = self.hot_cues[slot]
-        self.seek(cue_pos)
-        self.play()
-        logger.info(f"Deck {self.name}: HOT CUE {slot+1} triggered at {cue_pos:.2f}s")
-    
+    # --- HOT CUE Implementation ---
+    def set_hot_cue(self, slot: int, position: float):
+        if 0 <= slot < 4:
+            self.hot_cues[slot] = position
+            logger.info(f"Deck {self.name}: HOT CUE {slot+1} set at {position:.2f}s")
+
+    def jump_to_hot_cue(self, slot: int):
+        if 0 <= slot < 4 and self.hot_cues[slot] is not None:
+            self.set_position(self.hot_cues[slot])
+            logger.info(f"Deck {self.name}: Jumped to HOT CUE {slot+1}")
+
     def clear_hot_cue(self, slot: int):
-        """
-        Clear HOT CUE point
-        Args:
-            slot: CUE slot number (0-3)
-        """
-        if slot < 0 or slot >= 4:
-            logger.warning(f"Deck {self.name}: Invalid HOT CUE slot {slot}")
-            return
-        
-        if self.hot_cues[slot] is not None:
-            logger.info(f"Deck {self.name}: HOT CUE {slot+1} cleared (was at {self.hot_cues[slot]:.2f}s)")
+        if 0 <= slot < 4:
             self.hot_cues[slot] = None
-    
-    def clear_all_hot_cues(self):
-        """Clear all HOT CUE points"""
-        self.hot_cues = [None] * 4
-        logger.info(f"Deck {self.name}: All HOT CUEs cleared")
-    
-    def get_hot_cue(self, slot: int) -> Optional[float]:
-        """Get HOT CUE position (None if not set)"""
-        if slot < 0 or slot >= 4:
-            return None
-        return self.hot_cues[slot]
+            logger.info(f"Deck {self.name}: HOT CUE {slot+1} cleared")
 
-    # --- Playback Control ---
-    
-    def play(self): 
-        if self.stream_fx: BASS_LIB.BASS_ChannelPlay(self.stream_fx, False)
-    def pause(self): 
-        if self.stream_fx: BASS_LIB.BASS_ChannelPause(self.stream_fx)
-    def cue(self):
-        if self.stream_fx:
-            BASS_LIB.BASS_ChannelPause(self.stream_fx)
-            BASS_LIB.BASS_ChannelSetPosition(self.stream_fx, 0, BASS_POS_BYTE)
-    def seek(self, seconds: float):
-        if self.stream_fx:
-            pos = BASS_LIB.BASS_ChannelSeconds2Bytes(self.stream_fx, ctypes.c_double(seconds))
-            BASS_LIB.BASS_ChannelSetPosition(self.stream_fx, pos, BASS_POS_BYTE)
+    def clear_all_hot_cues(self):
+        self.hot_cues = [None] * 4
+        logger.debug(f"Deck {self.name}: All HOT CUEs cleared")
+
+    def get_dsp_settings(self):
+        stages = len(self.fx_eq_low) if self.fx_eq_low else 1
+        return {
+            'type': f"DX8(x{stages} Cascade)",
+            'eq_high': f"{self.eq_high:.1f}dB (eff: {self.eq_high * stages:.0f}dB)",
+            'eq_mid': f"{self.eq_mid:.1f}dB (eff: {self.eq_mid * stages:.0f}dB)",
+            'eq_low': f"{self.eq_low:.1f}dB (eff: {self.eq_low * stages:.0f}dB)",
+        }
+
+    def apply_track_analysis(self, analysis: dict):
+        """トラック解析結果を適用"""
+        if 'auto_gain' in analysis:
+            self.set_trim(analysis['auto_gain'])
+        if 'bpm' in analysis:
+            self.original_bpm = analysis['bpm']
+            logger.debug(f"Deck {self.name}: Original BPM set to {self.original_bpm}")
 
     def _generate_waveform(self, decode_stream, points=800):
-        if not NUMPY_AVAILABLE: return None
+        if not NUMPY_AVAILABLE or not decode_stream: return None
         try:
             len_bytes = BASS_LIB.BASS_ChannelGetLength(decode_stream, BASS_POS_BYTE)
             if len_bytes <= 0: return None
@@ -627,6 +630,5 @@ class VCI100_MIDI:
     CROSSFADER = 8; MASTER_VOLUME = 24
     CH1_VOLUME = 12; CH1_TRIM = 28; CH1_EQ_HIGH = 20; CH1_EQ_MID = 21; CH1_EQ_LOW = 22; CH1_FILTER = 23; CH1_TEMPO = 14
     CH2_VOLUME = 13; CH2_TRIM = 29; CH2_EQ_HIGH = 24; CH2_EQ_MID = 25; CH2_EQ_LOW = 26; CH2_FILTER = 27; CH2_TEMPO = 15
-    # Loop Controls (Added)
     CH1_LOOP = 66
     CH2_LOOP = 67

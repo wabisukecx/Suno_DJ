@@ -1,10 +1,12 @@
 """
-Mixer Core Logic (Phase 9G: Auto-Analysis & HotFolder Fix)
-=============================================================
-ä¿®æ­£ç‚¹:
-- èµ·å‹•æ™‚ã®æœªè§£æžãƒˆãƒ©ãƒƒã‚¯è‡ªå‹•è§£æžã‚’è¿½åŠ 
-- HotFolderWatcher ã® destination_folder è¨­å®šã‚’ä¿®æ­£
-- _emit_library_update ãƒ¡ã‚½ãƒƒãƒ‰ã‚’è¿½åŠ ï¼ˆå†å¸°å‘¼ã³å‡ºã—é˜²æ­¢ï¼‰
+Mixer Core Logic (Phase 9G + EQ Upgrade + Loop Upgrade)
+=========================================================
+修正点:
+- Phase1フィードバック対応: EQブーストを+3dB/段に制限 (実効+9dB)
+- Loop Upgrade: toggle_4bar_loop()でdeck.loop_start_sec/loop_duration_secを使用
+- 起動時の未解析トラック自動解析を追加
+- HotFolderWatcher の destination_folder 設定を修正
+- _emit_library_update メソッドを追加(再帰呼び出し防止)
 """
 
 import os
@@ -30,7 +32,7 @@ SUPPORTED_AUDIO_EXTENSIONS = (".mp3", ".wav", ".flac", ".ogg", ".m4a")
 
 
 class AIVCIMixer(QObject):
-    # --- GUIã¸ã®é€šçŸ¥ç”¨ã‚·ã‚°ãƒŠãƒ« ---
+    # --- GUIへの通知用シグナル ---
     deck_updated = pyqtSignal(str, dict)
     waveform_updated = pyqtSignal(str, object)
     prompt_generated = pyqtSignal(dict)
@@ -49,14 +51,15 @@ class AIVCIMixer(QObject):
     
     def __init__(self, tracks_folder="./tracks", debug_mode=False):
         super().__init__()
-        self.tracks_folder = os.path.abspath(tracks_folder)  # çµ¶å¯¾ãƒ‘ã‚¹ã«å¤‰æ›
+        self.tracks_folder = os.path.abspath(tracks_folder)  # 絶対パスに変換
         self.config = AudioConfig()
         self.audio_engine = AudioEngine(self.config)
         self.analyzer = TrackAnalyzer()
         self.prompt_generator = PromptGenerator()
         
-        # ä¿®æ­£: destination_folder ã‚’ã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ã§æ­£ã—ãè¨­å®š
+        # 修正: destination_folder をコンストラクタで正しく設定
         self.hot_folder_watcher = HotFolderWatcher(
+            watch_folder=os.path.join(os.path.expanduser("~"), "Downloads"),
             destination_folder=self.tracks_folder
         )
         
@@ -69,10 +72,22 @@ class AIVCIMixer(QObject):
         self.deck_a_info = None
         self.deck_b_info = None
         self._safe_start_mode = True
-        self._analyzing = False  # è§£æžä¸­ãƒ•ãƒ©ã‚°ï¼ˆå†å¸°é˜²æ­¢ï¼‰
+        self._analyzing = False  # 解析中フラグ(再帰防止)
         
-        self._setup_connections()
+        # MIDIコールバックは connect_controller() 後に登録
+        # _setup_connections() はここでは呼ばない
+        
+        # HotFolderとPromptWorkerの接続は常に必要
+        self.hot_folder_watcher.file_detected.connect(self._on_new_file_detected)
+        self.hot_folder_watcher.file_moved.connect(self._on_file_moved)
+        self.hot_folder_watcher.status_changed.connect(lambda s: self.status_updated.emit(s))
+        self.hot_folder_watcher.error_occurred.connect(lambda e: logger.error(f"HotFolder error: {e}"))
+        self.prompt_worker.finished.connect(self._on_prompt_generated)
+        self.prompt_worker.status_changed.connect(self.generation_status_changed)
+        
+        logger.info("About to initialize library...")
         self._init_library()
+        logger.info("Library initialization complete")
         
         from PyQt6.QtCore import QTimer
         self._time_update_timer = QTimer()
@@ -80,8 +95,15 @@ class AIVCIMixer(QObject):
         self._time_update_timer.setInterval(100)
         self.running = False
 
+    def connect_controller(self):
+        """MIDIコントローラーに接続し、成功したらコールバックを設定"""
+        connected = self.midi_controller.connect()
+        if connected:
+            self._setup_connections()
+        return connected
+    
     def _setup_connections(self):
-        """MIDIãŠã‚ˆã³å†…éƒ¨ã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆã®é…ç·š"""
+        """MIDIおよび内部コンポーネントの配線"""
         self.midi_controller.register_callback('crossfader', self.on_crossfader)
         self.midi_controller.register_callback('master_volume', self.on_master_volume)
         
@@ -143,18 +165,34 @@ class AIVCIMixer(QObject):
         self.midi_controller.register_callback('load_a', lambda v: self._load_selected_track("A"))
         self.midi_controller.register_callback('load_b', lambda v: self._load_selected_track("B"))
 
-        # External Events
-        self.hot_folder_watcher.file_detected.connect(self._on_new_file_detected)
-        self.hot_folder_watcher.file_moved.connect(self._on_file_moved)
-        self.hot_folder_watcher.status_changed.connect(lambda s: self.status_updated.emit(s))
-        self.hot_folder_watcher.error_occurred.connect(lambda e: logger.error(f"HotFolder error: {e}"))
-        self.prompt_worker.finished.connect(self._on_prompt_generated)
-        self.prompt_worker.status_changed.connect(self.generation_status_changed)
-
-    def connect_controller(self): return self.midi_controller.connect()
-    def _norm_to_db(self, val): return (val - 0.5) * 20.0
-    def _norm_to_eq_db(self, val): return (val - 0.5) * 30.0
-    def _norm_to_filter(self, val): return (val - 0.5) * 2.0
+    def _norm_to_db(self, val): 
+        return self.midi_controller.connect()
+    
+    def _norm_to_db(self, val): 
+        return (val - 0.5) * 20.0
+    
+    def _norm_to_eq_db(self, val):
+        """
+        MIDI 0.0-1.0 → EQ dB変換(非対称・DJミキサー仕様)
+        
+        Phase1フィードバック対応:
+        - ブーストを+3dB/段に制限 (実効+9dB)
+        - カットは-15dB/段 (実効-45dB)
+        
+        カーブ設計(1段あたりの値、3段カスケードで×3倍が実効値):
+          val=0.0   → -15.0dB (実効: -45dB ≈ full kill)
+          val=0.5   →   0.0dB (flat)
+          val=1.0   →  +3.0dB (実効: +9dB = safe boost, クリップなし)
+        """
+        if val <= 0.5:
+            # Cut: 0.0→-15dB, 0.5→0dB
+            return (val - 0.5) * 30.0
+        else:
+            # Boost: 0.5→0dB, 1.0→+3dB (Phase1修正: +6dB→+3dB)
+            return (val - 0.5) * 6.0
+    
+    def _norm_to_filter(self, val): 
+        return (val - 0.5) * 2.0
     
     def on_crossfader(self, val): 
         self._check_safe_start()
@@ -177,7 +215,7 @@ class AIVCIMixer(QObject):
         
         # BASS_ChannelIsActiveで再生状態を確認
         # 1=BASS_ACTIVE_PLAYING, 3=BASS_ACTIVE_PAUSED
-        from .audio_engine import BASS_LIB
+        from core.audio_engine import BASS_LIB
         if BASS_LIB:
             state = BASS_LIB.BASS_ChannelIsActive(deck.stream_fx)
             if state == 1:  # Playing
@@ -185,12 +223,13 @@ class AIVCIMixer(QObject):
             else:  # Paused or Stopped
                 deck.play() 
 
-    # --- Loop Logic (Phase 8C Week 3: Beat Snap) ---
+    # --- Loop Logic (Phase 8C Week 3 + Loop Upgrade) ---
     def toggle_4bar_loop(self, deck_id: str):
         deck = self.audio_engine.deck_a if deck_id == "A" else self.audio_engine.deck_b
         info = self.deck_a_info if deck_id == "A" else self.deck_b_info
         
-        if not deck.stream_fx or not info: return
+        if not deck.stream_fx or not info: 
+            return
 
         if deck.loop_active:
             deck.clear_loop()
@@ -198,112 +237,176 @@ class AIVCIMixer(QObject):
             self.loop_updated.emit(deck_id, False, 0.0, 0.0)
         else:
             bpm = info.get('bpm', 120.0)
-            first_beat = info.get('first_beat', 0.0)  # Phase 8C Week 3
+            first_beat = info.get('first_beat', 0.0)
             
             # ビートスナップ対応のループ設定
             deck.set_loop_snapped(bpm, first_beat, bars=4)
             
-            # ループ情報を取得してGUIに通知
-            # set_loop_snappedが内部でset_loopを呼ぶので、実際のループ位置を取得
-            loop_start = deck.get_position() if deck.loop_active else 0.0
-            loop_duration = 960.0 / (bpm if bpm > 0 else 120.0)
-            
-            self.status_updated.emit(f"Deck {deck_id}: Loop 4 Bars (Snapped)")
-            self.loop_updated.emit(deck_id, True, loop_start, loop_duration)
+            # Loop Upgrade: Deckに保存されたスナップ済み情報を使ってGUI通知
+            # ※ deck.get_position()はリアルタイム再生位置なので使わない
+            self.status_updated.emit(
+                f"Deck {deck_id}: Loop 4 Bars @ {deck.loop_start_sec:.1f}s "
+                f"({deck.loop_duration_sec:.2f}s)"
+            )
+            self.loop_updated.emit(
+                deck_id, True, 
+                deck.loop_start_sec, 
+                deck.loop_duration_sec
+            )
 
-    # --- HOT CUE Logic (Phase 8C Week 3: Auto-save) ---
+    # --- HOT CUE Logic (Phase 8C) ---
     def set_hot_cue(self, deck_id: str, slot: int):
-        """Set HOT CUE at current position"""
+        """現在の再生位置をHOT CUEに記録"""
         deck = self.audio_engine.deck_a if deck_id == "A" else self.audio_engine.deck_b
-        info = self.deck_a_info if deck_id == "A" else self.deck_b_info
-        
         if not deck.stream_fx:
-            self.status_updated.emit(f"Error: No track loaded on Deck {deck_id}")
             return
         
-        deck.set_hot_cue(slot)
-        self.status_updated.emit(f"Deck {deck_id}: HOT CUE {slot+1} SET")
-        
-        # HOT CUE自動保存（Phase 8C Week 3）
-        if info and 'filepath' in info:
-            self.analyzer.save_hot_cues(info['filepath'], deck.hot_cues)
-    
+        position = deck.get_position()
+        deck.set_hot_cue(slot, position)
+        self.status_updated.emit(f"Deck {deck_id}: HOT CUE {slot+1} set at {position:.1f}s")
+
     def trigger_hot_cue(self, deck_id: str, slot: int):
-        """Trigger HOT CUE (jump to position)"""
+        """HOT CUEにジャンプ"""
         deck = self.audio_engine.deck_a if deck_id == "A" else self.audio_engine.deck_b
-        if not deck.stream_fx:
-            return
-        
-        deck.trigger_hot_cue(slot)
-        # ステータスメッセージはaudio_engine側で出力済み
-    
+        deck.jump_to_hot_cue(slot)
+
     def clear_hot_cue(self, deck_id: str, slot: int):
-        """Clear HOT CUE point"""
+        """HOT CUEをクリア"""
         deck = self.audio_engine.deck_a if deck_id == "A" else self.audio_engine.deck_b
-        info = self.deck_a_info if deck_id == "A" else self.deck_b_info
-        
         deck.clear_hot_cue(slot)
-        self.status_updated.emit(f"Deck {deck_id}: HOT CUE {slot+1} CLEARED")
-        
-        # HOT CUE自動保存（Phase 8C Week 3）
-        if info and 'filepath' in info:
-            self.analyzer.save_hot_cues(info['filepath'], deck.hot_cues)
 
-    # --- Key Matching Logic (Phase 8C Week 2) ---
-    def _update_key_compatibility(self):
-        """現在ロードされているトラックのキー互換性を計算してライブラリに通知"""
-        from .track_analyzer import get_compatible_keys, extract_camelot_from_key
-        
-        # 両デッキがロードされていない場合は何もしない
-        if not self.deck_a_info and not self.deck_b_info:
-            self.key_compatibility_updated.emit([])
-            return
-        
-        # 現在アクティブなデッキのキーを取得
-        active_deck_info = self.deck_a_info if self.deck_a_info else self.deck_b_info
-        key_string = active_deck_info.get('key', '')
-        
-        if not key_string:
-            self.key_compatibility_updated.emit([])
-            return
-        
-        # Camelot表記を抽出
-        camelot = extract_camelot_from_key(key_string)
-        
-        if not camelot:
-            logger.warning(f"Could not extract Camelot key from: {key_string}")
-            self.key_compatibility_updated.emit([])
-            return
-        
-        # 互換キーリストを取得
-        compatible = get_compatible_keys(camelot)
-        
-        logger.info(f"Key compatibility: {camelot} → {compatible}")
-        self.key_compatibility_updated.emit(compatible)
+    # --- Sync Logic (Phase 8C Week 2) ---
+    def sync_deck_a(self):
+        """Deck AをDeck BのBPMに同期"""
+        if self.deck_b_info and self.deck_b_info.get('bpm'):
+            target_bpm = self.deck_b_info['bpm']
+            if self.audio_engine.deck_a.sync_bpm(target_bpm):
+                self.status_updated.emit(f"Deck A synced to {target_bpm:.1f} BPM")
+            else:
+                self.status_updated.emit("Sync failed: No BPM info")
 
-    # --- AI Prompt Logic ---
-    def manual_prompt_generate(self, vocal_enabled: bool):
-        """æ‰‹å‹•ã§ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆç”Ÿæˆã‚’ãƒˆãƒªã‚¬ãƒ¼"""
-        current = self.deck_a_info if self.deck_a_info else self.deck_b_info
-        if not current: 
-            self.status_updated.emit("Error: Load a track first")
+    def sync_deck_b(self):
+        """Deck BをDeck AのBPMに同期"""
+        if self.deck_a_info and self.deck_a_info.get('bpm'):
+            target_bpm = self.deck_a_info['bpm']
+            if self.audio_engine.deck_b.sync_bpm(target_bpm):
+                self.status_updated.emit(f"Deck B synced to {target_bpm:.1f} BPM")
+            else:
+                self.status_updated.emit("Sync failed: No BPM info")
+
+    # --- Library Navigation ---
+    def _move_cursor(self, delta: int):
+        with self.track_list_lock:
+            if not self.track_list: 
+                return
+            self.library_cursor = (self.library_cursor + delta) % len(self.track_list)
+            self.library_cursor_changed.emit(self.library_cursor)
+
+    def _load_selected_track(self, deck_id: str):
+        with self.track_list_lock:
+            if not self.track_list or self.library_cursor >= len(self.track_list): 
+                return
+            track = self.track_list[self.library_cursor]
+        self.load_track_by_path(deck_id, track['filepath'])
+
+    def _on_new_file_detected(self, filename: str):
+        """ホットフォルダで新規ファイル検出時の通知(移動前)"""
+        self.status_updated.emit(f"New file detected: {filename}")
+        
+    def _on_file_moved(self, src, dst): 
+        """ホットフォルダからファイルが移動された時の処理"""
+        filename = os.path.basename(dst)
+        logger.info(f"HotFolder: File moved to library: {filename}")
+        self.track_added.emit(filename)
+        
+        # 移動されたファイルを解析してライブラリ更新
+        def run():
+            logger.info(f"Auto-analyzing new track: {filename}")
+            self.status_updated.emit(f"Analyzing new track: {filename}")
+            self.analyzer.analyze_track(dst, force_reanalyze=True)
+            self._emit_library_update()
+            self.status_updated.emit(f"New track ready: {filename}")
+        Thread(target=run, daemon=True).start()
+    
+    def _update_positions(self):
+        if not self.running: 
             return
-            
+        self.position_updated.emit("A", self.audio_engine.deck_a.get_position(), self.audio_engine.deck_a.get_duration())
+        self.position_updated.emit("B", self.audio_engine.deck_b.get_position(), self.audio_engine.deck_b.get_duration())
+        
+    def start(self):
+        if not self.audio_engine.start(): 
+            logger.warning("Audio engine failed to start")
+            return
+        self.running = True
+        
+        # HotFolderWatcherの起動前に状態をログ
+        logger.info(f"Starting HotFolderWatcher...")
+        logger.info(f"  Watch folder: {self.hot_folder_watcher.watch_folder}")
+        logger.info(f"  Destination: {self.hot_folder_watcher.destination_folder}")
+        
+        self.hot_folder_watcher.start()
+        self._time_update_timer.start()
+        
+        logger.info("Mixer started successfully")
+        
+    def stop(self):
+        self.running = False
+        self._time_update_timer.stop()
+        self.hot_folder_watcher.stop()
+        self.audio_engine.stop()
+        self.midi_controller.close()
+        logger.info("Mixer stopped")
+
+    def manual_prompt_generate(self, vocal_enabled: bool = False):
+        """手動プロンプト生成トリガー"""
+        if self.prompt_worker.isRunning():
+            logger.warning("Prompt generation already in progress")
+            return
+
+        current = self.deck_a_info if self.audio_engine.deck_a.is_playing() else self.deck_b_info
+        if not current:
+            self.status_updated.emit("No track loaded for prompt generation")
+            return
+
         self.prompt_worker.setup(
-            current_analysis=current,
-            deck_a_analysis=self.deck_a_info,
-            deck_b_analysis=self.deck_b_info,
-            energy_target=4,
-            vocal=vocal_enabled
+            current_track=current,
+            deck_a_info=self.deck_a_info,
+            deck_b_info=self.deck_b_info,
+            energy_flow=self.prompt_generator.get_energy_flow_data(),
+            vocal_enabled=vocal_enabled
         )
         self.prompt_worker.start()
+        self.status_updated.emit("Generating AI prompt...")
 
-    # --- Library & BPM Update ---
+    def _on_prompt_generated(self, result: dict):
+        """プロンプト生成完了時のコールバック"""
+        self.prompt_generated.emit(result)
+        self.status_updated.emit("Prompt generated successfully")
+
+    def apply_relative_energy_evaluation(self):
+        """全トラックの相対エネルギーレベルを再計算（注: 呼び出し側で既にロック取得済み）"""
+        if not self.track_list:
+            return
+        
+        analyzed_tracks = [t for t in self.track_list if t.get('analyzed')]
+        if len(analyzed_tracks) < 2:
+            return
+        
+        self.analyzer.recalculate_relative_energy(analyzed_tracks)
+        
+        for track in self.track_list:
+            if track.get('analyzed'):
+                h = self.analyzer._get_file_hash(track['filepath'])
+                cached = self.analyzer.cache.get(h)
+                if cached and 'energy' in cached:
+                    track['energy'] = cached['energy']
+
     def update_track_bpm(self, filepath: str, new_bpm: float):
-        """æ‰‹å‹•ã§ã®BPMä¿®æ­£ã‚’ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã¨ç¾åœ¨ã®ãƒ‡ãƒƒã‚­ã«é©ç”¨"""
+        """BPMを手動補正し、該当のデッキに適用"""
         if self.analyzer.update_bpm(filepath, new_bpm):
             self.refresh_library()
-            # ãƒ­ãƒ¼ãƒ‰ä¸­ã®ãƒ‡ãƒƒã‚­æƒ…å ±ã‚‚æ›´æ–°
+            # ロード中のデッキ情報も更新
             if self.deck_a_info and self.deck_a_info['filepath'] == filepath:
                 self.deck_a_info['bpm'] = new_bpm
                 self.deck_updated.emit("A", self.deck_a_info)
@@ -322,44 +425,62 @@ class AIVCIMixer(QObject):
 
     def refresh_library(self):
         """ライブラリをスキャンし、未解析トラックを自動解析"""
+        logger.info("refresh_library: START")
         root = self.tracks_folder
         if not os.path.exists(root): 
             os.makedirs(root)
             logger.info(f"Created tracks folder: {root}")
-            
-        files = [f for f in os.listdir(root) if f.lower().endswith(SUPPORTED_AUDIO_EXTENSIONS)]
         
+        logger.info(f"Scanning folder: {root}")
+        files = [f for f in os.listdir(root) if f.lower().endswith(SUPPORTED_AUDIO_EXTENSIONS)]
+        logger.info(f"Found {len(files)} audio files")
+        
+        logger.info("Entering track_list_lock...")
         with self.track_list_lock:
+            logger.info("Lock acquired, building track list...")
             self.track_list = []
             
             unanalyzed = []  # 未解析トラックのリスト
             
-            for f in files:
+            for i, f in enumerate(files):
+                logger.info(f"Processing file {i+1}/{len(files)}: {f}")
                 path = os.path.join(root, f)
+                logger.info(f"  Getting file hash...")
                 h = self.analyzer._get_file_hash(path)
+                logger.info(f"  Hash: {h[:16]}...")
+                logger.info(f"  Checking cache...")
                 cached = self.analyzer.cache.get(h)
+                logger.info(f"  Cached: {cached is not None}")
                 item = {'filename': f, 'filepath': path, 'analyzed': cached is not None}
                 if cached: 
                     item.update(cached)
                 else:
                     unanalyzed.append(path)  # 未解析をリストに追加
                 self.track_list.append(item)
+                logger.info(f"  Added to track_list")
             
+            logger.info(f"Track list built: {len(self.track_list)} items")
+            logger.info("Calling apply_relative_energy_evaluation()...")
             self.apply_relative_energy_evaluation()
+            logger.info("apply_relative_energy_evaluation() complete")
             # ロック内でリストのコピーを作成してemit
             track_list_copy = list(self.track_list)
+            logger.info("Exiting track_list_lock...")
         
-        # ロック外でemit（GUIスレッドでの処理を避ける）
+        logger.info("Lock released")
+        # ロック外でemit(GUIスレッドでの処理を避ける)
+        logger.info(f"Emitting library_updated signal with {len(track_list_copy)} tracks")
         self.library_updated.emit(track_list_copy)
+        logger.info("library_updated signal emitted")
         
-        # 未解析トラックをバックグラウンドで解析（再帰防止チェック）
+        # 未解析トラックをバックグラウンドで解析(再帰防止チェック)
         if unanalyzed and not self._analyzing:
             logger.info(f"Found {len(unanalyzed)} unanalyzed tracks. Starting auto-analysis...")
             self.status_updated.emit(f"Analyzing {len(unanalyzed)} tracks...")
             self._analyze_unanalyzed_tracks(unanalyzed)
 
     def _analyze_unanalyzed_tracks(self, paths: list):
-        """æœªè§£æžãƒˆãƒ©ãƒƒã‚¯ã‚’ãƒãƒƒã‚¯ã‚°ãƒ©ã‚¦ãƒ³ãƒ‰ã§é †æ¬¡è§£æž"""
+        """未解析トラックをバックグラウンドで順次解析"""
         def run():
             self._analyzing = True
             try:
@@ -374,7 +495,7 @@ class AIVCIMixer(QObject):
                     except Exception as e:
                         logger.error(f"Failed to analyze {filename}: {e}")
                 
-                # å…¨ã¦å®Œäº†å¾Œã«ãƒ©ã‚¤ãƒ–ãƒ©ãƒªã‚’æ›´æ–°
+                # 全て完了後にライブラリを更新
                 logger.info(f"Auto-analysis complete: {total} tracks processed")
                 self.status_updated.emit(f"Analysis complete: {total} tracks")
                 self._emit_library_update()
@@ -384,8 +505,7 @@ class AIVCIMixer(QObject):
         Thread(target=run, daemon=True).start()
 
     def _emit_library_update(self):
-        """è§£æžæ¸ˆã¿ãƒ‡ãƒ¼ã‚¿ã§ãƒ©ã‚¤ãƒ–ãƒ©ãƒªã‚’å†æ§‹ç¯‰ã—ã¦é€šçŸ¥ï¼ˆå†å¸°å‘¼ã³å‡ºã—é˜²æ­¢ï¼‰"""
-        """解析済みデータでライブラリを再構築して通知（再帰呼び出し防止）"""
+        """解析済みデータでライブラリを再構築して通知(再帰呼び出し防止)"""
         root = self.tracks_folder
         if not os.path.exists(root):
             return
@@ -408,6 +528,7 @@ class AIVCIMixer(QObject):
             track_list_copy = list(self.track_list)
         
         self.library_updated.emit(track_list_copy)
+
     def analyze_track(self, filepath: str, force=False):
         def run():
             logger.info(f"Analyzing track: {os.path.basename(filepath)}")
@@ -421,12 +542,12 @@ class AIVCIMixer(QObject):
         deck = self.audio_engine.deck_a if deck_id == "A" else self.audio_engine.deck_b
         info = next((t for t in self.track_list if t['filepath'] == filepath), None)
         
-        # track_listã«ãªã„å ´åˆã¯è§£æžã‚’å®Ÿè¡Œ
+        # track_listにない場合は解析を実行
         if not info: 
             logger.info(f"Track not in library, analyzing: {os.path.basename(filepath)}")
             info = self.analyzer.analyze_track(filepath)
             self._emit_library_update()
-        # ã‚­ãƒ£ãƒƒã‚·ãƒ¥ãŒãªã„ï¼ˆæœªè§£æžï¼‰ã®å ´åˆã‚‚è§£æž
+        # キャッシュがない(未解析)の場合も解析
         elif not info.get('analyzed', False):
             logger.info(f"Track not analyzed, analyzing: {os.path.basename(filepath)}")
             info = self.analyzer.analyze_track(filepath)
@@ -438,136 +559,63 @@ class AIVCIMixer(QObject):
                 energy_profile = info.get('energy', {}).get('profile', [])
                 if name == "A": 
                     self.deck_a_info = info
-                    self.deck_updated.emit("A", info)
-                    self.waveform_updated.emit("A", deck.get_waveform_data())
-                    self.energy_profile_updated.emit("A", energy_profile, duration)
                 else: 
                     self.deck_b_info = info
-                    self.deck_updated.emit("B", info)
-                    self.waveform_updated.emit("B", deck.get_waveform_data())
-                    self.energy_profile_updated.emit("B", energy_profile, duration)
+                
                 deck.apply_track_analysis(info)
+                self.deck_updated.emit(deck_id, info)
+                self.waveform_updated.emit(deck_id, deck.get_waveform_data())
+                self.energy_profile_updated.emit(deck_id, energy_profile, duration)
+                self.dsp_updated.emit(deck_id, deck.get_dsp_settings())
                 
-                # HOT CUE読み込み（Phase 8C Week 3）
-                hot_cues = self.analyzer.load_hot_cues(filepath)
-                deck.hot_cues = hot_cues
-                logger.info(f"Deck {name}: HOT CUEs restored: {hot_cues}")
-                
-                # Key互換性を計算して通知（Phase 8C Week 2）
+                # Phase 8C Week 2: キー互換性チェック
                 self._update_key_compatibility()
                 
+                logger.info(f"Deck {deck_id}: Loaded {info.get('filename', 'Unknown')}")
+            else:
+                logger.error(f"Deck {deck_id}: Failed to load track")
+
         deck.on_load_complete = on_loaded
         deck.load(filepath)
 
-    def _on_prompt_generated(self, result): 
-        self.prompt_generated.emit(result)
-    
-    def _move_cursor(self, delta):
-        with self.track_list_lock:
-            if not self.track_list: return
-            self.library_cursor = max(0, min(len(self.track_list)-1, self.library_cursor + delta))
-        self.library_cursor_changed.emit(self.library_cursor)
-        
-    def _load_selected_track(self, deck_id):
-        with self.track_list_lock:
-            if 0 <= self.library_cursor < len(self.track_list):
-                filepath = self.track_list[self.library_cursor]['filepath']
-        # ロック外でロード（ファイルI/Oがあるため）
-        if filepath:
-            self.load_track_by_path(deck_id, filepath)
-            
-    def _on_new_file_detected(self, filename): 
-        logger.info(f"HotFolder: New file detected: {filename}")
-        self.status_updated.emit(f"New file detected: {filename}")
-        
-    def _on_file_moved(self, src, dst): 
-        """ãƒ›ãƒƒãƒˆãƒ•ã‚©ãƒ«ãƒ€ã‹ã‚‰ãƒ•ã‚¡ã‚¤ãƒ«ãŒç§»å‹•ã•ã‚ŒãŸæ™‚ã®å‡¦ç†"""
-        filename = os.path.basename(dst)
-        logger.info(f"HotFolder: File moved to library: {filename}")
-        self.track_added.emit(filename)
-        
-        # ç§»å‹•ã•ã‚ŒãŸãƒ•ã‚¡ã‚¤ãƒ«ã‚’è§£æžã—ã¦ãƒ©ã‚¤ãƒ–ãƒ©ãƒªæ›´æ–°
-        def run():
-            logger.info(f"Auto-analyzing new track: {filename}")
-            self.status_updated.emit(f"Analyzing new track: {filename}")
-            self.analyzer.analyze_track(dst, force_reanalyze=True)
-            self._emit_library_update()
-            self.status_updated.emit(f"New track ready: {filename}")
-        Thread(target=run, daemon=True).start()
-    
-    def _update_positions(self):
-        if not self.running: return
-        self.position_updated.emit("A", self.audio_engine.deck_a.get_position(), self.audio_engine.deck_a.get_duration())
-        self.position_updated.emit("B", self.audio_engine.deck_b.get_position(), self.audio_engine.deck_b.get_duration())
-        
-    def start(self):
-        if not self.audio_engine.start(): 
-            logger.warning("Audio engine failed to start")
+    def _update_key_compatibility(self):
+        """両デッキがロード済みの場合、キー互換性を計算してGUIに通知"""
+        if not self.deck_a_info or not self.deck_b_info:
+            self.key_compatibility_updated.emit([])
             return
-        self.running = True
-        # MIDI callback mode is used - no polling thread needed
         
-        # HotFolderWatcherã®èµ·å‹•å‰ã«çŠ¶æ…‹ã‚’ãƒ­ã‚°
-        logger.info(f"Starting HotFolderWatcher...")
-        logger.info(f"  Watch folder: {self.hot_folder_watcher.watch_folder}")
-        logger.info(f"  Destination: {self.hot_folder_watcher.destination_folder}")
+        key_a = self.deck_a_info.get('key')
+        key_b = self.deck_b_info.get('key')
         
-        self.hot_folder_watcher.start()
-        self._time_update_timer.start()
+        if not key_a or not key_b:
+            self.key_compatibility_updated.emit([])
+            return
         
-        logger.info("Mixer started successfully")
+        # Camelot Wheel風の互換性チェック(簡易版)
+        compatible = self._get_compatible_keys(key_a)
         
-    def stop(self):
-        self.running = False
-        self._time_update_timer.stop()
-        self.hot_folder_watcher.stop()
-        self.audio_engine.stop()
-        self.midi_controller.close()
-        logger.info("Mixer stopped")
+        # Deck Bのキーが互換リストに含まれている場合、ライブラリ中の互換曲を抽出
+        compatible_tracks = []
+        if key_b in compatible:
+            with self.track_list_lock:
+                for track in self.track_list:
+                    if track.get('key') in compatible and track['filepath'] != self.deck_a_info['filepath']:
+                        compatible_tracks.append(track.get('key', ''))
         
-    def apply_relative_energy_evaluation(self):
-        try:
-            # ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã«ã‚ã‚‹åˆ†æžãƒ‡ãƒ¼ã‚¿ã®ã¿ã‚’æŠ½å‡º
-            all_a = []
-            for t in self.track_list:
-                h = self.analyzer._get_file_hash(t['filepath'])
-                if h in self.analyzer.cache:
-                    all_a.append(self.analyzer.cache[h])
-            if all_a: 
-                self.energy_data_updated.emit(self.analyzer.recalculate_relative_energy(all_a))
-        except Exception as e:
-            logger.error(f"Relative energy evaluation error: {e}")
+        self.key_compatibility_updated.emit(list(set(compatible_tracks)))
 
-
-    # --- BPM Sync Functions (Phase 8C Week 2) ---
-    def sync_deck_a(self):
-        """Deck AをDeck BのBPMに同期"""
-        if not self.deck_b_info:
-            self.status_updated.emit("Error: Deck B not loaded")
-            return
+    def _get_compatible_keys(self, key: str) -> list:
+        """簡易的なキー互換性判定(±1セミトーン、相対調)"""
+        # 簡略化のため、同キー・±1セミトーンのみ
+        key_sequence = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
         
-        target_bpm = self.deck_b_info.get('bpm', 0)
-        if target_bpm <= 0:
-            self.status_updated.emit("Error: Deck B BPM invalid")
-            return
+        if key not in key_sequence:
+            return [key]
         
-        if self.audio_engine.deck_a.sync_tempo_to(target_bpm):
-            self.status_updated.emit(f"Deck A synced to {target_bpm:.1f} BPM")
-        else:
-            self.status_updated.emit("Deck A sync failed")
-    
-    def sync_deck_b(self):
-        """Deck BをDeck AのBPMに同期"""
-        if not self.deck_a_info:
-            self.status_updated.emit("Error: Deck A not loaded")
-            return
-        
-        target_bpm = self.deck_a_info.get('bpm', 0)
-        if target_bpm <= 0:
-            self.status_updated.emit("Error: Deck A BPM invalid")
-            return
-        
-        if self.audio_engine.deck_b.sync_tempo_to(target_bpm):
-            self.status_updated.emit(f"Deck B synced to {target_bpm:.1f} BPM")
-        else:
-            self.status_updated.emit("Deck B sync failed")
+        idx = key_sequence.index(key)
+        compatible = [
+            key,  # 同キー
+            key_sequence[(idx + 1) % 12],  # +1
+            key_sequence[(idx - 1) % 12],  # -1
+        ]
+        return compatible
