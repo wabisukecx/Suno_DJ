@@ -16,8 +16,8 @@ from logging.handlers import RotatingFileHandler
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from gui_main_window import MainWindow
-from mixer_core import AIVCIMixer
+from gui.gui_main_window import MainWindow
+from core.mixer_core import AIVCIMixer
 
 from PyQt6.QtWidgets import QApplication
 import logging
@@ -95,7 +95,7 @@ def main():
     
     # 1. コンポーネントの初期化
     mixer = AIVCIMixer(tracks_folder, debug_mode=debug_mode)
-    window = MainWindow()
+    window = MainWindow(prompt_generator=mixer.prompt_generator)
     
     # 2. シグナル接続（Mixer -> Window: 状態の反映）
     mixer.deck_updated.connect(window.update_deck_info)
@@ -164,6 +164,13 @@ def main():
     # 接続後にライブラリを強制リフレッシュして初期表示を確実にする
     mixer.refresh_library()
     
+
+    # Application cleanup on exit
+    def cleanup():
+        logger.info("Application shutting down...")
+        mixer.stop()
+    
+    app.aboutToQuit.connect(cleanup)
     sys.exit(app.exec())
 
 
