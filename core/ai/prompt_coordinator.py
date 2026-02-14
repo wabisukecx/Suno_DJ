@@ -17,8 +17,7 @@ import logging
 from typing import Dict, Optional
 
 from .prompt_base import (
-    GenerationMode, EnergyStrategy, ErrorType,
-    DailyQuota, TokenUsage, SunoPrompt
+    GenerationMode, EnergyStrategy, DailyQuota, TokenUsage
 )
 from .prompt_genre import GenreKnowledgeManager
 from .prompt_energy import EnergyFlowAnalyzer

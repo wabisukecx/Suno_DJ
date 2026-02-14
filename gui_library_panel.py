@@ -7,7 +7,7 @@ Library Panel (Phase 9 Final: High Contrast)
 """
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, 
+    QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, 
     QTableWidgetItem, QHeaderView, QLineEdit, QPushButton, QFrame,
     QMenu, QApplication
 )

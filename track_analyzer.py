@@ -16,7 +16,6 @@ import logging
 import time
 import numpy as np
 import librosa
-from pathlib import Path
 import ctypes
 
 try:
@@ -47,7 +46,7 @@ class TrackAnalyzer:
         self._setup_bass_functions()
         
     def _setup_bass_functions(self):
-        """BASS_FXé–¢æ•°ã®ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—"""
+        """BASS_FX関数のセットアップ"""
         if BASS_FX_AVAILABLE and BASS_FX_LIB:
             try:
                 if not getattr(BASS_FX_LIB.BASS_FX_BPM_DecodeGet, 'argtypes', None):
@@ -60,7 +59,7 @@ class TrackAnalyzer:
                 logger.warning(f"Failed to setup BASS_FX types: {e}")
 
     def _load_cache(self) -> dict:
-        """ã‚­ãƒ£ãƒƒã‚·ãƒ¥ãƒ•ã‚¡ã‚¤ãƒ«ã‚’èª­ã¿è¾¼ã¿"""
+        """キャッシュファイルを読み込み"""
         if os.path.exists(self.cache_file):
             try:
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
@@ -71,7 +70,7 @@ class TrackAnalyzer:
         return {}
 
     def _save_cache(self):
-        """ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚’ãƒ•ã‚¡ã‚¤ãƒ«ã«ä¿å­˜"""
+        """キャッシュをファイルに保存"""
         try:
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self.cache, f, indent=2, ensure_ascii=False)
@@ -79,7 +78,7 @@ class TrackAnalyzer:
             pass
 
     def _get_file_hash(self, filepath: str) -> str:
-        """ãƒ•ã‚¡ã‚¤ãƒ«ã®MD5ãƒãƒƒã‚·ãƒ¥ã‚’è¨ˆç®—"""
+        """ファイルのMD5ハッシュを計算"""
         hasher = hashlib.md5()
         try:
             with open(filepath, 'rb') as f:
@@ -93,14 +92,14 @@ class TrackAnalyzer:
 
     def analyze_track(self, filepath: str, force_reanalyze: bool = False) -> dict:
         """
-        ãƒˆãƒ©ãƒƒã‚¯ã‚’è§£æžã—ã¦BPMã€ã‚­ãƒ¼ã€ã‚¨ãƒãƒ«ã‚®ãƒ¼ãªã©ã‚’å–å¾—
+        トラックを解析してBPM、キー、エネルギーなどを取得
         
         Args:
-            filepath: è§£æžã™ã‚‹ãƒ•ã‚¡ã‚¤ãƒ«ãƒ‘ã‚¹
-            force_reanalyze: ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚’ç„¡è¦–ã—ã¦å†è§£æž
+            filepath: 解析するファイルパス
+            force_reanalyze: キャッシュを無視して再解析
             
         Returns:
-            è§£æžçµæžœã®è¾žæ›¸
+            解析結果の辞書
         """
         if not os.path.exists(filepath):
             return {}
@@ -122,13 +121,13 @@ class TrackAnalyzer:
         # Hybrid BPM with optimized librosa (single audio load)
         bpm_bass = self._get_bpm_bass(filepath)
         
-        # librosaã«ã‚ˆã‚‹çµ±åˆåˆ†æžï¼ˆBPMã€Keyã€First Beatã‚’1å›žã®ãƒ­ãƒ¼ãƒ‰ã§å–å¾—ï¼‰
+        # librosaによる統合分析（BPM、Key、First Beatを1回のロードで取得）
         librosa_result = self._analyze_with_librosa(filepath, 120.0)
         bpm_librosa = librosa_result['bpm']
         key = librosa_result['key']
         first_beat = librosa_result['first_beat']
         
-        # BPMã®æœ€çµ‚æ±ºå®š
+        # BPMの最終決定
         final_bpm = bpm_bass if bpm_bass > 0 else bpm_librosa
         if bpm_bass > 0 and bpm_librosa > 0 and abs(bpm_bass - bpm_librosa) > 5.0:
             final_bpm = bpm_bass
@@ -152,7 +151,7 @@ class TrackAnalyzer:
             'energy': energy_data,
             'auto_gain': float(auto_gain),
             'first_beat': float(first_beat),  # Phase 8C Week 3
-            'hot_cues': [None, None, None, None],  # Phase 8C Week 3: HOT CUEåˆæœŸå€¤
+            'hot_cues': [None, None, None, None],  # Phase 8C Week 3: HOT CUE初期値
             'last_analyzed': int(time.time())
         }
         
@@ -161,7 +160,7 @@ class TrackAnalyzer:
         return result
 
     def _get_metadata(self, filepath: str) -> dict:
-        """ID3ã‚¿ã‚°ã‹ã‚‰ãƒ¡ã‚¿ãƒ‡ãƒ¼ã‚¿ã‚’å–å¾—"""
+        """ID3タグからメタデータを取得"""
         meta = {'artist': '', 'title': '', 'genre': 'Unknown'}
         if not MUTAGEN_AVAILABLE:
             return meta
@@ -179,7 +178,7 @@ class TrackAnalyzer:
         return meta
 
     def _get_bpm_bass(self, filepath: str) -> float:
-        """BASS_FXã‚’ä½¿ç”¨ã—ã¦BPMã‚’æ¤œå‡º"""
+        """BASS_FXを使用してBPMを検出"""
         if not BASS_AVAILABLE or not BASS_FX_AVAILABLE:
             return 0.0
             
@@ -213,7 +212,7 @@ class TrackAnalyzer:
 
     def _analyze_with_librosa(self, filepath: str, target_bpm: float) -> dict:
         """
-        librosaã‚’ä½¿ã£ãŸçµ±åˆåˆ†æžï¼ˆ1å›žã®ã‚ªãƒ¼ãƒ‡ã‚£ã‚ªãƒ­ãƒ¼ãƒ‰ã§è¤‡æ•°ã®è§£æžã‚’å®Ÿè¡Œï¼‰
+        librosaを使った統合分析（1回のオーディオロードで複数の解析を実行）
         
         Returns:
             dict: {
@@ -223,10 +222,10 @@ class TrackAnalyzer:
             }
         """
         try:
-            # ã‚ªãƒ¼ãƒ‡ã‚£ã‚ªã‚’1å›žã ã‘ãƒ­ãƒ¼ãƒ‰
+            # オーディオを1回だけロード
             y, sr = librosa.load(filepath, sr=22050, duration=60)
             
-            # BPMæ¤œå‡º
+            # BPM検出
             bpm = 0.0
             try:
                 onset_env = librosa.onset.onset_strength(y=y, sr=sr)
@@ -235,14 +234,14 @@ class TrackAnalyzer:
             except Exception as e:
                 logger.debug(f"librosa BPM detection failed: {e}")
             
-            # ã‚­ãƒ¼æ¤œå‡º
+            # キー検出
             key = ""
             try:
                 chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
                 key_idx = np.argmax(np.mean(chroma, axis=1))
                 keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
                 
-                # Major/Minoråˆ¤å®šï¼ˆç°¡æ˜“ç‰ˆï¼‰
+                # Major/Minor判定（簡易版）
                 chroma_mean = np.mean(chroma, axis=1)
                 major_profile = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1])
                 minor_profile = np.array([1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0])
@@ -256,7 +255,7 @@ class TrackAnalyzer:
             except Exception as e:
                 logger.debug(f"librosa key detection failed: {e}")
             
-            # First Beatæ¤œå‡º
+            # First Beat検出
             first_beat = 0.0
             try:
                 onset_env = librosa.onset.onset_strength(y=y, sr=sr)
@@ -278,16 +277,16 @@ class TrackAnalyzer:
 
     def _to_camelot_key(self, key: str, scale: str) -> str:
         """
-        éŸ³æ¥½ã‚­ãƒ¼ã‚’Camelotè¡¨è¨˜ã«å¤‰æ›
+        音楽キーをCamelot表記に変換
         
         Args:
             key: 'C', 'C#', 'D', etc.
             scale: 'major' or 'minor'
         
         Returns:
-            Camelotè¡¨è¨˜ï¼ˆä¾‹: '8B', '8A'ï¼‰
+            Camelot表記（例: '8B', '8A'）
         """
-        # Camelotãƒ›ã‚¤ãƒ¼ãƒ«é †åºè¡¨
+        # Camelotホイール順序表
         key_map_major = {
             'B': '1B', 'F#': '2B', 'Db': '3B', 'Ab': '4B', 'Eb': '5B',
             'Bb': '6B', 'F': '7B', 'C': '8B', 'G': '9B', 'D': '10B',
@@ -302,16 +301,16 @@ class TrackAnalyzer:
         scale_lower = scale.lower()
         
         if scale_lower == 'major':
-            return key_map_major.get(key, '8B')  # ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆã¯C Major
+            return key_map_major.get(key, '8B')  # デフォルトはC Major
         else:
-            return key_map_minor.get(key, '8A')  # ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆã¯A Minor
+            return key_map_minor.get(key, '8A')  # デフォルトはA Minor
 
     def _analyze_energy(self, filepath: str) -> tuple:
         """
-        ã‚¨ãƒãƒ«ã‚®ãƒ¼è§£æžï¼ˆExplosive Dynamics - Power 2.5ï¼‰
+        エネルギー解析（Explosive Dynamics - Power 2.5）
         
         Returns:
-            (energy_data, auto_gain): ã‚¨ãƒãƒ«ã‚®ãƒ¼ãƒ‡ãƒ¼ã‚¿ã¨æŽ¨å¥¨ã‚²ã‚¤ãƒ³
+            (energy_data, auto_gain): エネルギーデータと推奨ゲイン
         """
         try:
             # 1. Load Audio
@@ -382,7 +381,7 @@ class TrackAnalyzer:
             return {}, 0.0
 
     def _estimate_genre_from_bpm(self, bpm: float) -> str:
-        """BPMã‹ã‚‰å¤§ã¾ã‹ãªã‚¸ãƒ£ãƒ³ãƒ«ã‚’æŽ¨å®š"""
+        """BPMから大まかなジャンルを推定"""
         if bpm < 100:
             return "Hip Hop / Trip Hop"
         elif bpm < 115:
@@ -400,14 +399,14 @@ class TrackAnalyzer:
 
     def update_bpm(self, filepath: str, new_bpm: float) -> bool:
         """
-        BPMã‚’æ‰‹å‹•ã§æ›´æ–°ï¼ˆGUIã‹ã‚‰ã®è£œæ­£ç”¨ï¼‰
+        BPMを手動で更新（GUIからの補正用）
         
         Args:
-            filepath: ãƒ•ã‚¡ã‚¤ãƒ«ãƒ‘ã‚¹
-            new_bpm: æ–°ã—ã„BPMå€¤
+            filepath: ファイルパス
+            new_bpm: 新しいBPM値
             
         Returns:
-            æ›´æ–°æˆåŠŸã—ãŸã‚‰True
+            更新成功したらTrue
         """
         file_hash = self._get_file_hash(filepath)
         if file_hash in self.cache:
@@ -419,15 +418,15 @@ class TrackAnalyzer:
 
     def recalculate_relative_energy(self, all_tracks: list) -> dict:
         """
-        å…¨ãƒˆãƒ©ãƒƒã‚¯ã®ç›¸å¯¾ã‚¨ãƒãƒ«ã‚®ãƒ¼ã‚’å†è¨ˆç®—ï¼ˆZ-scoreæ–¹å¼ï¼‰
+        全トラックの相対エネルギーを再計算（Z-score方式）
         
         Args:
-            all_tracks: ãƒˆãƒ©ãƒƒã‚¯ãƒªã‚¹ãƒˆ
+            all_tracks: トラックリスト
             
         Returns:
-            ãƒ•ã‚¡ã‚¤ãƒ«ãƒ‘ã‚¹ â†’ ç›¸å¯¾ã‚¨ãƒãƒ«ã‚®ãƒ¼ (1.0-5.0) ã®ãƒžãƒƒãƒ—
+            ファイルパス → 相対エネルギー (1.0-5.0) のマップ
         """
-        # å…¨ãƒˆãƒ©ãƒƒã‚¯ã®mean energyã‚’åŽé›†
+        # 全トラックのmean energyを収集
         energies = []
         filepath_to_mean = {}
         
@@ -439,23 +438,23 @@ class TrackAnalyzer:
                 filepath_to_mean[track['filepath']] = mean
         
         if len(energies) < 2:
-            # ãƒˆãƒ©ãƒƒã‚¯ãŒå°‘ãªã™ãŽã‚‹å ´åˆã¯ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆå€¤
+            # トラックが少なすぎる場合はデフォルト値
             return {fp: 3.0 for fp in filepath_to_mean.keys()}
         
-        # Z-scoreã§æ­£è¦åŒ–
+        # Z-scoreで正規化
         mean_val = np.mean(energies)
         std_val = np.std(energies)
         
         if std_val < 0.01:
-            # æ¨™æº–åå·®ãŒã»ã¼ã‚¼ãƒ­ã®å ´åˆã¯å…¨ã¦3.0
+            # 標準偏差がほぼゼロの場合は全て3.0
             return {fp: 3.0 for fp in filepath_to_mean.keys()}
         
         relative_map = {}
         for filepath, mean in filepath_to_mean.items():
-            # Z-scoreè¨ˆç®—
+            # Z-score計算
             z_score = (mean - mean_val) / std_val
             
-            # 1.0-5.0ã®ã‚¹ã‚±ãƒ¼ãƒ«ã«ãƒžãƒƒãƒ”ãƒ³ã‚°ï¼ˆÂ±3Ïƒã§ç¯„å›²ã«åŽã‚ã‚‹ï¼‰
+            # 1.0-5.0のスケールにマッピング（±3σで範囲に収める）
             # z=-3 -> 1.0, z=0 -> 3.0, z=+3 -> 5.0
             relative = 3.0 + (z_score * (2.0 / 3.0))
             relative = max(1.0, min(5.0, relative))
@@ -466,15 +465,15 @@ class TrackAnalyzer:
 
     def update_hot_cue(self, filepath: str, slot: int, position: float) -> bool:
         """
-        HOT CUEãƒã‚¤ãƒ³ãƒˆã‚’æ›´æ–°
+        HOT CUEポイントを更新
         
         Args:
-            filepath: ãƒ•ã‚¡ã‚¤ãƒ«ãƒ‘ã‚¹
-            slot: CUEã‚¹ãƒ­ãƒƒãƒˆ (0-3)
-            position: ä½ç½®ï¼ˆç§’ï¼‰
+            filepath: ファイルパス
+            slot: CUEスロット (0-3)
+            position: 位置（秒）
             
         Returns:
-            æ›´æ–°æˆåŠŸã—ãŸã‚‰True
+            更新成功したらTrue
         """
         if slot < 0 or slot > 3:
             return False
@@ -492,14 +491,14 @@ class TrackAnalyzer:
 
     def clear_hot_cue(self, filepath: str, slot: int) -> bool:
         """
-        HOT CUEãƒã‚¤ãƒ³ãƒˆã‚’ã‚¯ãƒªã‚¢
+        HOT CUEポイントをクリア
         
         Args:
-            filepath: ãƒ•ã‚¡ã‚¤ãƒ«ãƒ‘ã‚¹
-            slot: CUEã‚¹ãƒ­ãƒƒãƒˆ (0-3)
+            filepath: ファイルパス
+            slot: CUEスロット (0-3)
             
         Returns:
-            ã‚¯ãƒªã‚¢æˆåŠŸã—ãŸã‚‰True
+            クリア成功したらTrue
         """
         if slot < 0 or slot > 3:
             return False

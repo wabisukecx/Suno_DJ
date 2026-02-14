@@ -11,7 +11,6 @@ tracksフォルダに自動移動する。
 3. 拡張子・最小サイズチェック（不正ファイル除外）
 """
 
-import os
 import time
 import shutil
 import logging

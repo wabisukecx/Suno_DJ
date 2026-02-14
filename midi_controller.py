@@ -7,7 +7,6 @@ VCI-100コントローラーのMIDI入出力を管理するモジュール。
 
 import logging
 import rtmidi
-from pathlib import Path
 from core.audio_engine import VCI100_MIDI
 
 logger = logging.getLogger(__name__)

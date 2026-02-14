@@ -3,13 +3,13 @@ Deck Widget (Phase 9 Final: High Contrast)
 """
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QHBoxLayout, QFrame, 
-    QGraphicsDropShadowEffect, QPushButton
+    QPushButton
 )
 from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QBrush, QPolygonF
 import numpy as np
 from typing import Optional
-from gui.gui_styles import COLORS, get_deck_color
+from gui_styles import COLORS, get_deck_color
 
 class WaveformWidget(QWidget):
     def __init__(self, accent_color: str):

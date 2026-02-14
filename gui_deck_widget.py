@@ -3,7 +3,7 @@ Deck Widget (Phase 9 Final: High Contrast)
 """
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QHBoxLayout, QFrame, 
-    QGraphicsDropShadowEffect, QPushButton
+    QPushButton
 )
 from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QBrush, QPolygonF

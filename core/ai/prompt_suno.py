@@ -13,7 +13,6 @@ Phase 8L: Suno UI形式プロンプト生成
 
 import random
 import logging
-from typing import Dict, List, Optional
 
 from .prompt_base import SunoPrompt, EnergyStrategy
 

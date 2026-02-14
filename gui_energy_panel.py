@@ -8,7 +8,6 @@ Deck A/B を上下に分割表示し、時間軸を同期。
 from PyQt6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit
 )
-from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 
 from gui_styles import COLORS

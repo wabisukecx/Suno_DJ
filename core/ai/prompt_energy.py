@@ -14,7 +14,7 @@ Phase R1: エネルギー推移解析（暫定実装のみ）
 6. エネルギー推移解析（Phase R1 - 暫定実装）
 """
 
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 from threading import Lock
 from .prompt_base import EnergyStrategy, DJStyleProfile, EnergyHistoryEntry
 
