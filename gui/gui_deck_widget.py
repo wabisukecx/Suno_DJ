@@ -1,24 +1,15 @@
 """
 Deck Widget (Phase 9 Final: High Contrast)
-==========================================
-Fixes:
-- Forced White color for Track Title and Time.
-- Improved visibility on dark background.
 """
-
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QHBoxLayout, QFrame, 
     QGraphicsDropShadowEffect, QPushButton
 )
 from PyQt6.QtCore import Qt, QPointF
-from PyQt6.QtGui import (
-    QFont, QPainter, QColor, QPen, QBrush, QPolygonF
-)
+from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QBrush, QPolygonF
 import numpy as np
 from typing import Optional
-
 from gui.gui_styles import COLORS, get_deck_color
-
 
 class WaveformWidget(QWidget):
     def __init__(self, accent_color: str):
@@ -26,33 +17,22 @@ class WaveformWidget(QWidget):
         self.accent_color = accent_color
         self.waveform_data: Optional[np.ndarray] = None
         self.position_ratio: float = 0.0
-        self.normalization_factor: float = 1.0
-        
-        # Loop State
+        self.normalization_factor = 1.0
         self.loop_active = False
         self.loop_start_ratio = 0.0
         self.loop_width_ratio = 0.0
-        
-        self.setMinimumHeight(100)  # æ³¢å½¢è¡¨ç¤ºæœ€å°é«˜ã•
-        self.setMaximumHeight(140)  # æ³¢å½¢è¡¨ç¤ºæœ€å¤§é«˜ã•
+        self.setMinimumHeight(100)
+        self.setMaximumHeight(140)
         
     def set_waveform(self, waveform: Optional[np.ndarray]):
         self.waveform_data = waveform
-        self.normalization_factor = 1.0
         if self.waveform_data is not None and len(self.waveform_data) > 0:
-            try:
-                max_val = np.max(np.abs(self.waveform_data))
-                if max_val > 0:
-                    self.normalization_factor = 1.0 / max_val
-            except Exception as e:
-                self.normalization_factor = 1.0
+            max_val = np.max(np.abs(self.waveform_data))
+            self.normalization_factor = 1.0 / max_val if max_val > 0 else 1.0
         self.update()
     
     def set_position(self, position: float, duration: float):
-        if duration > 0:
-            self.position_ratio = position / duration
-        else:
-            self.position_ratio = 0.0
+        self.position_ratio = position / duration if duration > 0 else 0.0
         self.update()
 
     def set_loop(self, active: bool, start: float, duration: float, track_duration: float):
@@ -60,113 +40,73 @@ class WaveformWidget(QWidget):
         if active and track_duration > 0:
             self.loop_start_ratio = start / track_duration
             self.loop_width_ratio = duration / track_duration
-        else:
-            self.loop_start_ratio = 0.0
-            self.loop_width_ratio = 0.0
         self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
-        # Background
         painter.fillRect(self.rect(), QColor(COLORS['waveform_bg']))
         
-        width = self.width()
-        height = self.height()
+        width, height = self.width(), self.height()
         mid_y = height / 2
         
         # Grid
         painter.setPen(QPen(QColor(COLORS['waveform_grid']), 1, Qt.PenStyle.DotLine))
         painter.drawLine(0, int(mid_y), width, int(mid_y))
-        for i in range(1, 4):
-            x = i * (width / 4)
-            painter.drawLine(int(x), 0, int(x), height)
-            
-        # Waveform
+        
+        # Waveform Drawing
         if self.waveform_data is not None and len(self.waveform_data) > 0:
             color = QColor(self.accent_color)
             painter.setPen(QPen(color, 1))
             painter.setBrush(QBrush(color))
             
-            points = []
             sample_count = len(self.waveform_data)
             step = max(1, sample_count // width)
             display_data = self.waveform_data[::step]
-            
+            points = []
             for x, val in enumerate(display_data):
                 if x >= width: break
                 h = val * self.normalization_factor * (height / 2) * 0.9
                 points.append(QPointF(x, mid_y - h))
-            
-            for x in range(len(display_data) - 1, -1, -1):
-                if x >= width: continue
-                val = display_data[x]
-                h = val * self.normalization_factor * (height / 2) * 0.9
-                points.append(QPointF(x, mid_y + h))
-            
+            for x in range(len(points)-1, -1, -1):
+                p = points[x]
+                points.append(QPointF(p.x(), mid_y + (mid_y - p.y())))
             painter.drawPolygon(QPolygonF(points))
 
-        # Loop Region
+        # Loop & Playhead
         if self.loop_active:
-            lx = self.loop_start_ratio * width
-            lw = self.loop_width_ratio * width
-            
+            lx, lw = self.loop_start_ratio * width, self.loop_width_ratio * width
             loop_color = QColor(self.accent_color)
             loop_color.setAlpha(60)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QBrush(loop_color))
-            painter.drawRect(int(lx), 0, int(lw), height)
+            painter.fillRect(int(lx), 0, int(lw), height, loop_color)
             
-            painter.setPen(QPen(QColor(self.accent_color), 2))
-            painter.drawLine(int(lx), 0, int(lx), height)
-            painter.drawLine(int(lx + lw), 0, int(lx + lw), height)
-            
-            painter.setPen(QPen(QColor('#ffffff'), 1))
-            painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-            painter.drawText(int(lx) + 4, 12, "LOOP")
-
-        # Playhead
         px = self.position_ratio * width
         painter.setPen(QPen(QColor('#ffffff'), 2))
         painter.drawLine(int(px), 0, int(px), height)
-
 
 class DeckWidget(QFrame):
     def __init__(self, deck_id: str):
         super().__init__()
         self.deck_id = deck_id
         self.accent_color = get_deck_color(deck_id)
-        
-        self.current_bpm = 0.0
         self.tempo_percent = 0.0
-        self.loop_active = False
         
-        # Force styles for visibility
-        self.setStyleSheet(f"""
-            DeckWidget {{
-                background-color: {COLORS['surface']};
-                border: 1px solid {COLORS['border']};
-                border-radius: 8px;
-            }}
-            QLabel {{ color: {COLORS['text']}; }}
-        """)
+        self.setStyleSheet(f"background-color: {COLORS['surface']}; border: 1px solid {COLORS['border']}; border-radius: 8px;")
         
-        layout = QVBoxLayout()
-        layout.setSpacing(2)  # ã‚³ãƒ³ãƒ‘ã‚¯ãƒˆåŒ–
-        layout.setContentsMargins(10, 6, 10, 6)  # ä¸Šä¸‹ãƒžãƒ¼ã‚¸ãƒ³å‰Šæ¸›
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 6, 10, 6)
         
-        # Header
+        # Header (Deck Name & Time)
         header = QHBoxLayout()
-        deck_label = QLabel(f"DECK {deck_id}")
-        deck_label.setFont(QFont("Bahnschrift", 14, QFont.Weight.Bold))
-        deck_label.setStyleSheet(f"color: {self.accent_color};")
+        self.deck_label = QLabel(f"DECK {deck_id}")
+        self.deck_label.setFont(QFont("Bahnschrift", 14, QFont.Weight.Bold))
+        self.deck_label.setStyleSheet(f"color: {self.accent_color}; border: none;")
         
         self.time_label = QLabel("--:--")
         self.time_label.setFont(QFont("Consolas", 14, QFont.Weight.Bold))
-        self.time_label.setStyleSheet(f"color: {COLORS['text']};") # Force White
+        self.time_label.setStyleSheet(f"color: {COLORS['text']}; border: none;")
         
-        header.addWidget(deck_label)
+        header.addWidget(self.deck_label)
         header.addStretch()
         header.addWidget(self.time_label)
         layout.addLayout(header)
@@ -174,142 +114,51 @@ class DeckWidget(QFrame):
         # Track Info
         self.track_title = QLabel("NO TRACK LOADED")
         self.track_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self.track_title.setWordWrap(True)
-        self.track_title.setStyleSheet(f"color: {COLORS['text']};") # Force White
+        self.track_title.setStyleSheet(f"color: {COLORS['text']}; border: none;")
         layout.addWidget(self.track_title)
         
         self.track_meta = QLabel("-")
-        self.track_meta.setFont(QFont("Segoe UI", 9))
-        self.track_meta.setStyleSheet(f"color: {COLORS['text_dim']};")
+        self.track_meta.setStyleSheet(f"color: {COLORS['text_dim']}; border: none;")
         layout.addWidget(self.track_meta)
         
         # Waveform
         self.waveform_widget = WaveformWidget(self.accent_color)
         layout.addWidget(self.waveform_widget)
         
-        # HOT CUE Buttons (Phase 8C)
+        # Hot Cues
         cue_row = QHBoxLayout()
-        cue_row.setSpacing(3)
-        cue_row.setContentsMargins(0, 4, 0, 2)  # ä¸Š4pxã€ä¸‹2px
         self.hot_cue_btns = []
         for i in range(4):
-            btn = QPushButton(f"{i+1}")  # "CUE 1" Ã¢â€ â€™ "1" Ã£ÂÂ§Ã£â€šÂ³Ã£Æ’Â³Ã£Æ’â€˜Ã£â€šÂ¯Ã£Æ’Ë†Ã¥Å’â€“
-            btn.setFixedSize(32, 22)  # Ã¥Â¹â€¦32px, Ã©Â«ËœÃ£Ââ€¢22pxÃ£ÂÂ«Ã§Â¸Â®Ã¥Â°Â
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {COLORS['surface_hover']};
-                    border: 1px solid {COLORS['border']};
-                    color: {COLORS['text_dim']};
-                    border-radius: 3px;
-                    font-size: 10px;
-                    font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: {COLORS['border']};
-                    color: {COLORS['text']};
-                }}
-            """)
-            # Ã£Æ’â€žÃ£Æ’Â¼Ã£Æ’Â«Ã£Æ’ÂÃ£Æ’Æ’Ã£Æ’â€”Ã£ÂÂ§Ã¨ÂªÂ¬Ã¦ËœÅ½Ã¨Â¡Â¨Ã§Â¤Âº
-            btn.setToolTip(f"HOT CUE {i+1}\nClick: Trigger | Shift+Click: Set | Ctrl+Click: Clear")
+            btn = QPushButton(f"{i+1}")
+            btn.setFixedSize(32, 22)
+            btn.setStyleSheet(f"background-color: {COLORS['surface_hover']}; color: {COLORS['text_dim']}; border: 1px solid {COLORS['border']};")
             btn.setProperty("cue_slot", i)
-            btn.setProperty("deck_id", deck_id)
             self.hot_cue_btns.append(btn)
             cue_row.addWidget(btn)
-        cue_row.addStretch()  # Ã¥ÂÂ³Ã¥ÂÂ´Ã£ÂÂ«Ã£â€šÂ¹Ã£Æ’Å¡Ã£Æ’Â¼Ã£â€šÂ¹Ã¨Â¿Â½Ã¥Å Â 
-        layout.addLayout(cue_row)
         
-        # Sync/Loop Button
         self.sync_btn = QPushButton("SYNC")
         self.sync_btn.setCheckable(True)
-        self.sync_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {COLORS['surface_hover']};
-                border: 1px solid {COLORS['border']};
-                color: {COLORS['text_dim']};
-                border-radius: 4px;
-                padding: 4px;
-                font-weight: bold;
-            }}
-            QPushButton:checked {{
-                background-color: {self.accent_color};
-                color: #000000;
-                border: 1px solid {self.accent_color};
-            }}
-        """)
-        layout.addWidget(self.sync_btn, alignment=Qt.AlignmentFlag.AlignRight)
-        
-        self.setLayout(layout)
-        
-        # Shadow
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(15)
-        shadow.setColor(QColor(0, 0, 0, 80))
-        shadow.setOffset(0, 4)
-        self.setGraphicsEffect(shadow)
+        self.sync_btn.setFixedSize(60, 22)
+        cue_row.addStretch()
+        cue_row.addWidget(self.sync_btn)
+        layout.addLayout(cue_row)
 
     def update_info(self, info: dict):
         if not info: return
-        filename = info.get('filename', 'Unknown')
+        self.track_title.setText(info.get('filename', 'Unknown'))
         bpm = info.get('bpm', 0.0)
-        self.current_bpm = bpm
-        genre = info.get('genre', '-')
         key = info.get('key', '-')
-        energy_val = info.get('energy', {}).get('numeric', 0.0)
-        
-        effective_bpm = bpm * (1.0 + self.tempo_percent / 100.0)
-        
-        self.track_title.setText(filename)
-        if abs(self.tempo_percent) > 0.1:
-            bpm_str = f"{bpm:.1f}ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢{effective_bpm:.1f} BPM"
-        else:
-            bpm_str = f"{bpm:.1f} BPM"
-        
-        self.track_meta.setText(f"{genre.upper()} | {bpm_str} | KEY: {key} | LVL: {energy_val:.1f}")
+        energy = info.get('energy', {}).get('numeric', 0.0)
+        self.track_meta.setText(f"{info.get('genre', '-').upper()} | {bpm:.1f} BPM | KEY: {key} | LVL: {energy:.1f}")
 
     def update_time(self, position: float, duration: float):
-        mins = int(position // 60)
-        secs = int(position % 60)
+        mins, secs = divmod(int(position), 60)
         self.time_label.setText(f"{mins:02d}:{secs:02d}")
         self.waveform_widget.set_position(position, duration)
 
-    def set_waveform(self, waveform_data: Optional[np.ndarray]):
+    def set_waveform(self, waveform_data):
         self.waveform_widget.set_waveform(waveform_data)
 
-    def update_loop_state(self, active: bool, start: float, duration: float, track_duration: float):
-        self.loop_active = active
-        self.waveform_widget.set_loop(active, start, duration, track_duration)
-        
-        current_text = self.track_meta.text().split(" | LOOP")[0]
-        if active:
-            self.track_meta.setText(f"{current_text} | LOOP ON")
-            self.track_meta.setStyleSheet(f"color: {self.accent_color}; font-weight: bold;")
-        else:
-            self.track_meta.setText(current_text)
-            self.track_meta.setStyleSheet(f"color: {COLORS['text_dim']};")
-
-    def clear(self):
-        self.track_title.setText("NO TRACK LOADED")
-        self.track_meta.setText("-")
-        self.time_label.setText("--:--")
-        self.waveform_widget.set_waveform(None)
-        self.waveform_widget.set_loop(False, 0, 0, 0)
-
     def set_highlight(self, highlight: bool):
-        if highlight:
-            self.setStyleSheet(f"""
-                DeckWidget {{
-                    background-color: {COLORS['surface']};
-                    border: 2px solid {self.accent_color};
-                    border-radius: 12px;
-                }}
-                QLabel {{ color: {COLORS['text']}; }}
-            """)
-        else:
-            self.setStyleSheet(f"""
-                DeckWidget {{
-                    background-color: {COLORS['surface']};
-                    border: 1px solid {COLORS['border']};
-                    border-radius: 8px;
-                }}
-                QLabel {{ color: {COLORS['text']}; }}
-            """)
+        border_width = "2px" if highlight else "1px"
+        self.setStyleSheet(f"DeckWidget {{ background-color: {COLORS['surface']}; border: {border_width} solid {self.accent_color}; border-radius: 8px; }}")

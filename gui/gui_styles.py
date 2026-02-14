@@ -1,7 +1,7 @@
 """
 GUI Styles
 ==========
-Phase 9: High Contrast Dark Theme (Fixed for Library Panel)
+Phase 9: High Contrast Dark Theme (Final Fixed Version)
 """
 
 COLORS = {
@@ -24,6 +24,9 @@ COLORS = {
     # Waveform
     'waveform_bg': '#000000',
     'waveform_grid': '#333333',
+    'success': '#00ff88',
+    'warning': '#ff9800',
+    'error': '#f44336',
 }
 
 STYLESHEETS = {
@@ -51,24 +54,12 @@ STYLESHEETS = {
             selection-background-color: rgba(0, 255, 0, 0.3);
             selection-color: {COLORS['text']};
         }}
-        QTableWidget::item:selected {{
-            background-color: rgba(0, 255, 0, 0.3);
-            color: {COLORS['text']};
-            font-weight: bold;
-        }}
-        QTableWidget::item:hover {{
-            background-color: {COLORS['surface_hover']};
-        }}
         QHeaderView::section {{
             background-color: {COLORS['surface']};
             color: {COLORS['text_dim']};
             padding: 4px;
             border: none;
             border-bottom: 1px solid {COLORS['border']};
-        }}
-        QTableCornerButton::section {{
-            background-color: {COLORS['surface']};
-            border: none;
         }}
     """,
 
@@ -109,54 +100,17 @@ STYLESHEETS = {
             border-radius: 4px;
             padding: 4px 8px;
         }}
-        QLineEdit:focus, QTextEdit:focus {{
-            border-color: {COLORS['accent']};
-        }}
     """,
     
     'button_primary': f"""
         QPushButton {{
-            background-color: {COLORS['accent']};
-            color: {COLORS['text_dark']};
-            border: none;
+            background-color: #2563eb;
+            color: white;
             border-radius: 4px;
             padding: 8px 16px;
             font-weight: bold;
         }}
-        QPushButton:hover {{
-            background-color: #00acc1;
-        }}
-        QPushButton:pressed {{
-            background-color: #008ba3;
-        }}
-    """,
-    
-    'button_secondary': f"""
-        QPushButton {{
-            background-color: {COLORS['surface']};
-            color: {COLORS['text']};
-            border: 1px solid {COLORS['border']};
-            border-radius: 4px;
-            padding: 8px 16px;
-        }}
-        QPushButton:hover {{
-            background-color: {COLORS['surface_hover']};
-            border-color: {COLORS['accent']};
-        }}
-    """,
-    
-    'button_accent': f"""
-        QPushButton {{
-            background-color: {COLORS['deck_a']};
-            color: {COLORS['text']};
-            border: none;
-            border-radius: 4px;
-            padding: 8px 16px;
-            font-weight: bold;
-        }}
-        QPushButton:hover {{
-            background-color: #ff4569;
-        }}
+        QPushButton:hover {{ background-color: #3b82f6; }}
     """,
     
     'progress_bar': f"""
