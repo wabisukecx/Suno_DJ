@@ -11,11 +11,11 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from gui.gui_deck_widget import DeckWidget
-from gui.gui_prompt_panel import SunoPromptPanel
-from gui.gui_energy_panel import EnergyFlowPanel
-from gui.gui_library_panel import LibraryPanel
-from gui.gui_styles import STYLESHEETS
+from gui_deck_widget import DeckWidget
+from gui_prompt_panel import SunoPromptPanel
+from gui_energy_panel import EnergyFlowPanel
+from gui_library_panel import LibraryPanel
+from gui_styles import STYLESHEETS
 
 
 class MainWindow(QMainWindow):
@@ -34,7 +34,7 @@ class MainWindow(QMainWindow):
     hot_cue_set_requested = pyqtSignal(str, int)
     hot_cue_clear_requested = pyqtSignal(str, int)
 
-    def __init__(self, prompt_generator=None):
+    def __init__(self, prompt_coordinator=None):
         super().__init__()
         self.setWindowTitle("VCI-100 AI DJ Mixer - Phase 9 (Pro Layout)")
         
@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
         
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
-        self.prompt_gen = prompt_generator
+        self.prompt_coordinator = prompt_coordinator
         
         self._init_ui()
         self._connect_internal_ui()
@@ -58,7 +58,7 @@ class MainWindow(QMainWindow):
         self.main_h_splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # 1. 左側: Suno プロンプトパネル
-        self.prompt_panel = SunoPromptPanel("A", self.prompt_gen)
+        self.prompt_panel = SunoPromptPanel("A", self.prompt_coordinator)
         self.prompt_panel.setMinimumWidth(320)
         self.main_h_splitter.addWidget(self.prompt_panel)
         

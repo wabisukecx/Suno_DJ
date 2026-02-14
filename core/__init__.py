@@ -1,22 +1,38 @@
 """
-Core logic modules for VCI-100 AI DJ Mixer.
+Core Module - VCI-100 AI DJ Mixer
+==================================
 
-This package contains the main business logic components:
-- mixer_core: Main integration controller (AIVCIMixer)
-- audio_engine: BASS-based audio playback and processing
-- track_analyzer: Music analysis (BPM, key, energy detection)
-- prompt_generator: AI-powered prompt generation using Gemini API
+コアモジュール
+
+このパッケージは以下を提供します:
+1. オーディオエンジン（audio_engine, deck, audio_constants）
+2. AIプロンプト生成（ai/）
+3. ミキサーコア（mixer_core）
+4. トラック分析（track_analyzer）
 """
 
-from .mixer_core import AIVCIMixer
-from .audio_engine import AudioEngine, AudioConfig
-from .track_analyzer import TrackAnalyzer
-from .prompt_generator import PromptGenerator
+# Audio Engine
+from .audio_constants import (
+    BASS_AVAILABLE, BASS_FX_AVAILABLE, NUMPY_AVAILABLE,
+    BASS_LIB, BASS_FX_LIB
+)
+from .deck import Deck, AudioConfig
+from .audio_engine import AudioEngine, VCI100_MIDI
+
+# AI Module (already exists)
+# from .ai import PromptCoordinator, ...
 
 __all__ = [
-    'AIVCIMixer',
-    'AudioEngine',
+    # Audio Constants
+    'BASS_AVAILABLE',
+    'BASS_FX_AVAILABLE',
+    'NUMPY_AVAILABLE',
+    'BASS_LIB',
+    'BASS_FX_LIB',
+    
+    # Deck & Engine
     'AudioConfig',
-    'TrackAnalyzer',
-    'PromptGenerator',
+    'Deck',
+    'AudioEngine',
+    'VCI100_MIDI',
 ]

@@ -9,7 +9,7 @@ from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QBrush, QPolygonF
 import numpy as np
 from typing import Optional
-from gui.gui_styles import COLORS, get_deck_color
+from gui_styles import COLORS, get_deck_color
 
 class WaveformWidget(QWidget):
     def __init__(self, accent_color: str):
@@ -162,3 +162,15 @@ class DeckWidget(QFrame):
     def set_highlight(self, highlight: bool):
         border_width = "2px" if highlight else "1px"
         self.setStyleSheet(f"DeckWidget {{ background-color: {COLORS['surface']}; border: {border_width} solid {self.accent_color}; border-radius: 8px; }}")
+    
+    def update_loop_state(self, active: bool, start: float, duration: float, total: float):
+        """
+        ループ状態を更新（Phase 8C Loop Upgrade対応）
+        
+        Args:
+            active: ループが有効かどうか
+            start: ループ開始位置（秒）
+            duration: ループ長（秒）
+            total: トラック全体の長さ（秒）
+        """
+        self.waveform_widget.set_loop(active, start, duration, total)

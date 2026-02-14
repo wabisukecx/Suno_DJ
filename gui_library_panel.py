@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
 
-from gui.gui_styles import COLORS, STYLESHEETS
+from gui_styles import COLORS, STYLESHEETS
 
 class LibraryPanel(QFrame):
     load_track_requested = pyqtSignal(str, str) # deck_id, filepath
@@ -101,7 +101,7 @@ class LibraryPanel(QFrame):
             # Key表記からCamelotコードを抽出して照合 (例: "8A (Am)" -> "8A")
             # core.track_analyzerがインポート可能な前提
             try:
-                from core.track_analyzer import extract_camelot_from_key
+                from track_analyzer import extract_camelot_from_key
                 track_camelot = extract_camelot_from_key(key_str)
             except ImportError:
                 track_camelot = key_str.split(' ')[0] # 簡易抽出

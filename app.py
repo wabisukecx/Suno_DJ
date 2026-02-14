@@ -16,8 +16,8 @@ from logging.handlers import RotatingFileHandler
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from gui.gui_main_window import MainWindow
-from core.mixer_core import AIVCIMixer
+from gui_main_window import MainWindow
+from mixer_core import AIVCIMixer
 
 from PyQt6.QtWidgets import QApplication
 import logging
@@ -95,7 +95,7 @@ def main():
     
     # 1. コンポーネントの初期化
     mixer = AIVCIMixer(tracks_folder, debug_mode=debug_mode)
-    window = MainWindow(prompt_generator=mixer.prompt_generator)
+    window = MainWindow(prompt_coordinator=mixer.prompt_coordinator)
     
     # 2. シグナル接続（Mixer -> Window: 状態の反映）
     mixer.deck_updated.connect(window.update_deck_info)
@@ -117,10 +117,19 @@ def main():
         else:
             total = mixer.audio_engine.deck_b.get_duration()
         
-        if deck_id == "A":
-            window.deck_a_widget.update_loop_state(active, start, duration, total)
-        else:
-            window.deck_b_widget.update_loop_state(active, start, duration, total)
+        try:
+            if deck_id == "A":
+                if hasattr(window.deck_a_widget, 'update_loop_state'):
+                    window.deck_a_widget.update_loop_state(active, start, duration, total)
+                else:
+                    logger.warning(f"Deck A widget missing update_loop_state method")
+            else:
+                if hasattr(window.deck_b_widget, 'update_loop_state'):
+                    window.deck_b_widget.update_loop_state(active, start, duration, total)
+                else:
+                    logger.warning(f"Deck B widget missing update_loop_state method")
+        except Exception as e:
+            logger.error(f"Error updating loop state for Deck {deck_id}: {e}", exc_info=True)
 
     mixer.loop_updated.connect(on_loop_updated)
     
