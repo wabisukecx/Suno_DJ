@@ -1,4 +1,4 @@
-# VCI-100 AI DJ Mixer v3.0
+# AI DJ Mixer
 
 ## Legacy Hardware × Generative AI × Modern Audio Engine
 
