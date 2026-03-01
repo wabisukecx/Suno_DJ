@@ -8,6 +8,8 @@ Vestaxの名機 **VCI-100** を現代のPC環境で蘇らせる、AI搭載型DJ�
 **コアコンセプト**: 「終わりのない、しかし文脈を持ったDJセット」  
 **設計哲学**: AI-Human Co-Creation — AIは「提案」、DJが「選択」
 
+<img width="1202" height="933" alt="image" src="https://github.com/user-attachments/assets/6254fb86-9ea0-4263-92e0-869d2d07031f" />
+
 ---
 
 ## 主な機能 (Features)
