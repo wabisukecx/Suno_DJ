@@ -16,7 +16,7 @@ from logging.handlers import RotatingFileHandler
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from gui_main_window import MainWindow
+from gui.gui_main_window import MainWindow
 from mixer_core import AIVCIMixer
 
 from PyQt6.QtWidgets import QApplication
@@ -132,7 +132,15 @@ def main():
             logger.error(f"Error updating loop state for Deck {deck_id}: {e}", exc_info=True)
 
     mixer.loop_updated.connect(on_loop_updated)
-    
+
+    # P-02 Beatgrid: ビートグリッドを各デッキウィジェットに反映
+    def on_beatgrid_updated(deck_id: str, times: list):
+        widget = window.deck_a_widget if deck_id == 'A' else window.deck_b_widget
+        if hasattr(widget, 'set_beat_grid'):
+            widget.set_beat_grid(times)
+
+    mixer.beatgrid_updated.connect(on_beatgrid_updated)
+
     # ホットフォルダからのトラック追加通知（GUIへのトースト表示）
     mixer.track_added.connect(window.on_track_added)
     
@@ -158,7 +166,69 @@ def main():
     window.hot_cue_trigger_requested.connect(mixer.trigger_hot_cue)
     window.hot_cue_set_requested.connect(mixer.set_hot_cue)
     window.hot_cue_clear_requested.connect(mixer.clear_hot_cue)
-    
+
+    # MIDIマッピング変更（XMLインポート/プリセット切り替え後に反映）
+    window.midi_mapping_changed.connect(mixer.apply_midi_mapping)
+
+    # ---- Gamification シグナル接続（Phase R8）----
+
+    # Mixer → Window: スコア・講評更新
+    mixer.game_score_updated.connect(window.update_game_score)
+    mixer.commentary_received.connect(window.update_commentary)
+
+    # Window → Mixer: ゲーム機能のオンオフ・会場切替・講評リクエスト
+    window.gamification_enabled_changed.connect(mixer.set_gamification_enabled)
+    window.venue_changed.connect(mixer.set_venue)
+    window.commentary_requested.connect(mixer.request_commentary)
+
+    # セッション終了：結果取得→ダイアログ表示
+    def _on_finish_session():
+        result = mixer.finish_game_session()
+        window.show_session_result(result)
+    window.finish_session_requested.connect(_on_finish_session)
+
+    # VUメーター更新（position_updatedと同タイミング）
+    def _update_vu(deck_id: str, pos: float, dur: float):
+        if deck_id == "A":
+            l, r = mixer.audio_engine.deck_a.get_level()
+            window.deck_a_widget.update_vu(l, r)
+        else:
+            l, r = mixer.audio_engine.deck_b.get_level()
+            window.deck_b_widget.update_vu(l, r)
+    mixer.position_updated.connect(_update_vu)
+
+    # DSP状態可視化（EQ/Filter値をデッキウィジェットに反映）
+    def _update_dsp(deck_id: str, dsp: dict):
+        w = window.deck_a_widget if deck_id == "A" else window.deck_b_widget
+        w.update_dsp(
+            dsp.get('eq_high', 0.0),
+            dsp.get('eq_mid',  0.0),
+            dsp.get('eq_low',  0.0),
+            dsp.get('filter_val', 0.0)
+        )
+    mixer.dsp_updated.connect(_update_dsp)
+
+    # 波形クリックでシーク
+    def _on_seek_requested(deck_id: str, seconds: float):
+        deck = mixer.audio_engine.deck_a if deck_id == "A" else mixer.audio_engine.deck_b
+        if deck.stream_fx:
+            from core.audio_constants import BASS_LIB, BASS_POS_BYTE
+            byte_pos = BASS_LIB.BASS_ChannelSeconds2Bytes(deck.stream_fx, seconds)
+            BASS_LIB.BASS_ChannelSetPosition(deck.stream_fx, byte_pos, BASS_POS_BYTE)
+    window.deck_a_widget.seek_requested.connect(_on_seek_requested)
+    window.deck_b_widget.seek_requested.connect(_on_seek_requested)
+
+    # HOT CUE表示更新（position_updatedに便乗り）
+    # HotCueManager経由で取得（deck.hot_cuesは廃止）
+    def _update_hot_cues(deck_id: str, pos: float, dur: float):
+        if deck_id == "A":
+            slots = [s.position for s in mixer.hcm_a.all_slots()]
+            window.deck_a_widget.update_hot_cues(slots)
+        else:
+            slots = [s.position for s in mixer.hcm_b.all_slots()]
+            window.deck_b_widget.update_hot_cues(slots)
+    mixer.position_updated.connect(_update_hot_cues)
+
     # 4. 実行開始
     # MIDIコントローラーの接続確認
     if mixer.connect_controller():
