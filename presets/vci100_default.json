@@ -1,0 +1,223 @@
+{
+  "version": 1,
+  "preset_name": "VCI-100 Default",
+  "device_name": "Vestax",
+  "entries": [
+    {
+      "event_name": "crossfader",
+      "msg_type": "cc",
+      "control": 8,
+      "label": "クロスフェーダー (VR1)"
+    },
+    {
+      "event_name": "deck_a_volume",
+      "msg_type": "cc",
+      "control": 12,
+      "label": "Deck A: チャンネルボリューム (VR2 Ch1 Fader)"
+    },
+    {
+      "event_name": "deck_b_volume",
+      "msg_type": "cc",
+      "control": 13,
+      "label": "Deck B: チャンネルボリューム (VR3 Ch2 Fader)"
+    },
+    {
+      "event_name": "deck_a_tempo",
+      "msg_type": "cc",
+      "control": 14,
+      "label": "Deck A: テンポ (VR4 Ch1 Pitch)"
+    },
+    {
+      "event_name": "deck_b_tempo",
+      "msg_type": "cc",
+      "control": 15,
+      "label": "Deck B: テンポ (VR21 Ch2 Pitch)"
+    },
+    {
+      "event_name": "deck_a_eq_high",
+      "msg_type": "cc",
+      "control": 20,
+      "label": "Deck A: EQ High (VR5 Ch1 EQ Hi)"
+    },
+    {
+      "event_name": "deck_a_eq_mid",
+      "msg_type": "cc",
+      "control": 21,
+      "label": "Deck A: EQ Mid (VR6 Ch1 EQ Mid)"
+    },
+    {
+      "event_name": "deck_a_eq_low",
+      "msg_type": "cc",
+      "control": 22,
+      "label": "Deck A: EQ Low (VR7 Ch1 EQ Low)"
+    },
+    {
+      "event_name": "deck_a_filter",
+      "msg_type": "cc",
+      "control": 23,
+      "label": "Deck A: フィルター (VR8 Ch1 Filter/Low)"
+    },
+    {
+      "event_name": "deck_b_eq_high",
+      "msg_type": "cc",
+      "control": 24,
+      "label": "Deck B: EQ High (VR13 Ch2 EQ Hi)"
+    },
+    {
+      "event_name": "deck_b_eq_mid",
+      "msg_type": "cc",
+      "control": 25,
+      "label": "Deck B: EQ Mid (VR14 Ch2 EQ Mid)"
+    },
+    {
+      "event_name": "deck_b_eq_low",
+      "msg_type": "cc",
+      "control": 26,
+      "label": "Deck B: EQ Low (VR15 Ch2 EQ Low)"
+    },
+    {
+      "event_name": "deck_b_filter",
+      "msg_type": "cc",
+      "control": 27,
+      "label": "Deck B: フィルター (VR16 Ch2 Filter/Low)"
+    },
+    {
+      "event_name": "deck_a_trim",
+      "msg_type": "cc",
+      "control": 28,
+      "label": "Deck A: トリム (VR9 Ch1 Trim)"
+    },
+    {
+      "event_name": "deck_b_trim",
+      "msg_type": "cc",
+      "control": 29,
+      "label": "Deck B: トリム (VR11 Ch2 Trim)"
+    },
+    {
+      "event_name": "master_volume",
+      "msg_type": "cc",
+      "control": 7,
+      "label": "マスターボリューム (VR22)"
+    },
+    {
+      "event_name": "play_a",
+      "msg_type": "note",
+      "control": 50,
+      "label": "Deck A: Play/Pause (SW1)"
+    },
+    {
+      "event_name": "cue_a",
+      "msg_type": "note",
+      "control": 52,
+      "label": "Deck A: Cue (SW3)"
+    },
+    {
+      "event_name": "play_b",
+      "msg_type": "note",
+      "control": 54,
+      "label": "Deck B: Play/Pause (SW5)"
+    },
+    {
+      "event_name": "cue_b",
+      "msg_type": "note",
+      "control": 56,
+      "label": "Deck B: Cue (SW7)"
+    },
+    {
+      "event_name": "loop_a",
+      "msg_type": "note",
+      "control": 66,
+      "label": "Deck A: ループ (SW21 Ch1 Loop*4)"
+    },
+    {
+      "event_name": "loop_b",
+      "msg_type": "note",
+      "control": 67,
+      "label": "Deck B: ループ (SW40 Ch2 Loop*4)"
+    },
+    {
+      "event_name": "sync_a",
+      "msg_type": "note",
+      "control": 70,
+      "label": "Deck A: Sync (SW24)"
+    },
+    {
+      "event_name": "sync_b",
+      "msg_type": "note",
+      "control": 71,
+      "label": "Deck B: Sync (SW37)"
+    },
+    {
+      "event_name": "prev_track",
+      "msg_type": "note",
+      "control": 92,
+      "label": "前のトラック (SW16 Cursor上)"
+    },
+    {
+      "event_name": "next_track",
+      "msg_type": "note",
+      "control": 93,
+      "label": "次のトラック (SW18 Cursor下)"
+    },
+    {
+      "event_name": "load_a",
+      "msg_type": "note",
+      "control": 96,
+      "label": "Deck A: ロード (SW19 Cursor左)"
+    },
+    {
+      "event_name": "load_b",
+      "msg_type": "note",
+      "control": 97,
+      "label": "Deck B: ロード (SW20 Cursor右)"
+    },
+    {
+      "event_name": "loop_size_up_a",
+      "msg_type": "note",
+      "control": 101,
+      "label": "Deck A: Loop Size + (SW12 Loop右上)"
+    },
+    {
+      "event_name": "loop_size_dn_a",
+      "msg_type": "note",
+      "control": 102,
+      "label": "Deck A: Loop Size - (SW13 Loop右中)"
+    },
+    {
+      "event_name": "loop_size_up_b",
+      "msg_type": "note",
+      "control": 103,
+      "label": "Deck B: Loop Size + (SW14 Loop右下)"
+    },
+    {
+      "event_name": "loop_size_dn_b",
+      "msg_type": "note",
+      "control": 104,
+      "label": "Deck B: Loop Size - (SW15 Loop丸)"
+    },
+    {
+      "event_name": "beat_grid_fwd_a",
+      "msg_type": "note",
+      "control": 86,
+      "label": "Deck A: Beat Grid +1"
+    },
+    {
+      "event_name": "beat_grid_bwd_a",
+      "msg_type": "note",
+      "control": 83,
+      "label": "Deck A: Beat Grid -1"
+    },
+    {
+      "event_name": "beat_grid_fwd_b",
+      "msg_type": "note",
+      "control": 87,
+      "label": "Deck B: Beat Grid +1"
+    },
+    {
+      "event_name": "beat_grid_bwd_b",
+      "msg_type": "note",
+      "control": 84,
+      "label": "Deck B: Beat Grid -1"
+    }
+  ]
+}
