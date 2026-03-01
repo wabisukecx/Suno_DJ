@@ -323,7 +323,9 @@ class EnergyHistoryEntry:
     
     Attributes:
         track_name (str): トラック名
-        energy_level (int): エネルギーレベル（1-5）
+        energy_level (float): エネルギーレベル（1.0-5.0 連続値）
+            旧実装では int に丸めていたが、3.4 と 3.6 が同一視される
+            精度劣化を防ぐため float に変更。
         genre (str): ジャンル
         bpm (float): BPM
         key (str): キー
@@ -332,16 +334,16 @@ class EnergyHistoryEntry:
     Example:
         >>> entry = EnergyHistoryEntry(
         ...     track_name="track1.mp3",
-        ...     energy_level=4,
+        ...     energy_level=3.7,
         ...     genre="Techno",
         ...     bpm=130.0,
         ...     key="Am"
         ... )
-        >>> print(entry.track_name)
-        track1.mp3
+        >>> print(entry.energy_level)
+        3.7
     """
     track_name: str
-    energy_level: int
+    energy_level: float   # 修正: int → float（精度劣化を防止）
     genre: str
     bpm: float
     key: str

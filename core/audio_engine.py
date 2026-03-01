@@ -112,21 +112,58 @@ class AudioEngine:
         self.master_volume = max(0.0, min(1.0, v))
         self._update_mix()
     
+    # ① Xfader transform: Mixxx enginexfader.cpp 準拠
+    # transform=1.0 がデフォルト（現行の cos/sin に近い安全側の結果）。
+    # 将来的に GUI設定から変更可能にするため属性として公開。
+    # transform > 1.0 → カーブが錐になる（スクラッチ履行向き）
+    # transform < 1.0 → カーブが緩やかになる（ブレンド履行向き）
+    xfader_transform: float = 1.0
+
+    def _calc_xfade_gains(self, pos: float) -> tuple[float, float]:
+        """クロスフェーダーゲインを計算（Mixxx enginexfader.cpp 準拠）
+
+        ① Xfader transform対応版。transform=1.0 時は cos/sin 方式とほぼ同等。
+        transform が大きいほどクロスポイントが鄐しくなる（DJXフェーダーカーブ設定対応）。
+
+        Args:
+            pos: クロスフェーダー位置 (0.0=A全強, 1.0=B全強)
+
+        Returns:
+            (gain_a, gain_b): 両デッキのゲイン (0.0-1.0)
+        """
+        t = max(0.1, self.xfader_transform)  # 0除算防止
+
+        # Mixxx: getPowerCalibration() = 0.5^(1/transform)
+        # クロスポイントを3dB点に引き寄せる校正値
+        calibration = 0.5 ** (1.0 / t)
+
+        # pos を calibration でスケーリング（-calibration 〜 +calibration の範囲に居ねる）
+        pos_cal = pos * calibration
+        left_side  = pos_cal - calibration   # Deck A側（負の時は全強）
+        right_side = pos_cal + calibration   # Deck B側（正の時は全強）
+
+        gain_a = max(0.0, 1.0 - right_side ** t) if right_side > 0 else 1.0
+        gain_b = max(0.0, 1.0 - (-left_side) ** t) if left_side < 0 else 1.0
+
+        # Constant Power補正: gain_a² + gain_b² = 1 に正規化
+        norm = math.sqrt(gain_a ** 2 + gain_b ** 2)
+        if norm > 0:
+            gain_a /= norm
+            gain_b /= norm
+
+        return gain_a, gain_b
+
     def _update_mix(self):
         """
         ミックス状態を更新
-        
-        コンスタントパワークロスフェーダー:
-        - Deck A: cos(θ) × master_volume
-        - Deck B: sin(θ) × master_volume
-        - θ = crossfader × (π/2)
+
+        ① Xfader transform 対応版クロスフェーダー:
+        - xfader_transform=1.0 時は Mixxx デフォルト（cos/sin とほぼ同等）
+        - xfader_transform は将来的に GUI設定から変更可能
         """
-        theta = self.crossfader * (math.pi / 2)
-        coeff_a = math.cos(theta) * self.master_volume
-        coeff_b = math.sin(theta) * self.master_volume
-        
-        self.deck_a.set_master_volume_coeff(coeff_a)
-        self.deck_b.set_master_volume_coeff(coeff_b)
+        coeff_a, coeff_b = self._calc_xfade_gains(self.crossfader)
+        self.deck_a.set_master_volume_coeff(coeff_a * self.master_volume)
+        self.deck_b.set_master_volume_coeff(coeff_b * self.master_volume)
 
 
 class VCI100_MIDI:

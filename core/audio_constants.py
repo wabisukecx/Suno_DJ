@@ -27,7 +27,8 @@ BASS_ATTRIB_FREQ = 1
 BASS_ATTRIB_VOL = 2
 BASS_ATTRIB_PAN = 3
 BASS_ATTRIB_TEMPO = 0x10000
-BASS_ATTRIB_TEMPO_PITCH = 0x10004
+BASS_ATTRIB_TEMPO_PITCH = 0x10001  # bass_fx.h: enum { BASS_ATTRIB_TEMPO=0x10000, BASS_ATTRIB_TEMPO_PITCH, BASS_ATTRIB_TEMPO_FREQ }
+# 修正: 旧値 0x10004 は誤り（存在しない属性ID）。0x10001 が正しい BASS_FX の PITCH 属性
 
 # Stream Flags
 BASS_UNICODE = 0x80000000
@@ -45,11 +46,45 @@ BASS_SYNC_MIXTIME = 0x40000000
 
 # FX Constants
 BASS_FX_DX8_PARAMEQ = 7
-BASS_FX_BFX_BQF = 0x1000F
+# BASS_FX_BFX_BQF: bass_fx.h enum ( ROTATE=0x10000始まり ) から数えて第19番目(0基準) = 0x10000+19 = 0x10013
+# enum順: ROTATE(0),ECHO(1),FLANGER(2),VOLUME(3),PEAKEQ(4),REVERB(5),LPF(6),
+#        MIX(7),DAMP(8),AUTOWAH(9),ECHO2(10),PHASER(11),ECHO3(12),CHORUS(13),
+#        APF(14),COMPRESSOR(15),DISTORTION(16),COMPRESSOR2(17),VOLUME_ENV(18),BQF(19)
+BASS_FX_BFX_BQF = 0x10013  # = 0x10000 + 19
 
-# BQF Filter Types
-BASS_BFX_BQF_LOWPASS = 0
-BASS_BFX_BQF_HIGHPASS = 1
+# BQF Filter Types (bass_fx.h準拠)
+BASS_BFX_BQF_LOWPASS    = 0
+BASS_BFX_BQF_HIGHPASS   = 1
+BASS_BFX_BQF_BANDPASS   = 2
+BASS_BFX_BQF_BANDPASS_Q = 3  # constant skirt gain
+BASS_BFX_BQF_NOTCH      = 4
+BASS_BFX_BQF_ALLPASS    = 5
+BASS_BFX_BQF_PEAKINGEQ  = 6  # Bell型イコライザー（D-02 BQF EQ移行用）
+BASS_BFX_BQF_LOWSHELF   = 7
+BASS_BFX_BQF_HIGHSHELF  = 8
+
+# BQF Channel Flags (bass_fx.h準拠)
+BASS_BFX_CHANALL  = -1  # 全チャンネル（デフォルト）
+BASS_BFX_CHANNONE =  0  # 全チャンネル無効
+
+# BASS_ChannelGetLevelEx flags (bass.h準拠)
+BASS_LEVEL_MONO   = 1  # モノレベル取得
+BASS_LEVEL_STEREO = 2  # ステレオレベル取得
+BASS_LEVEL_RMS    = 4  # RMSレベル（ピークでなく真のRMS）
+BASS_LEVEL_VOLPAN = 8  # VOL/PAN属性をレベルに適用
+
+# BASS_FX Tempo Options (bass_fx.h準拠)
+# BASS_ChannelSetAttribute(stream_fx, BASS_ATTRIB_TEMPO_OPTION_xxx, value) で設定
+# enum順(bass_fx.h): USE_AA_FILTER(0x10010), AA_FILTER_LENGTH, USE_QUICKALGO,
+#                   SEQUENCE_MS, SEEKWINDOW_MS, OVERLAP_MS, PREVENT_CLICK
+# PREVENT_CLICK = 0x10010 + 6 = 0x10016
+BASS_ATTRIB_TEMPO_OPTION_USE_AA_FILTER      = 0x10010  # TRUE(default)/FALSE
+BASS_ATTRIB_TEMPO_OPTION_AA_FILTER_LENGTH   = 0x10011  # 32(default), 8..128 taps
+BASS_ATTRIB_TEMPO_OPTION_USE_QUICKALGO      = 0x10012  # TRUE/FALSE(default)
+BASS_ATTRIB_TEMPO_OPTION_SEQUENCE_MS        = 0x10013  # 82(default), 0=auto
+BASS_ATTRIB_TEMPO_OPTION_SEEKWINDOW_MS      = 0x10014  # 28(default), 0=auto
+BASS_ATTRIB_TEMPO_OPTION_OVERLAP_MS         = 0x10015  # 8(default)
+BASS_ATTRIB_TEMPO_OPTION_PREVENT_CLICK      = 0x10016  # TRUE/FALSE(default): クリックノイズ防止
 
 # ============================================================
 # Platform-Specific Library Configuration
@@ -114,13 +149,24 @@ class BASS_BFX_BQF(ctypes.Structure):
 # ============================================================
 
 # Sync Callback (For Looping)
-SYNCPROC = ctypes.CFUNCTYPE(
-    None,
-    ctypes.c_uint32,  # handle
-    ctypes.c_uint32,  # channel
-    ctypes.c_uint32,  # data
-    ctypes.c_void_p   # user
-)
+# Windows BASS.dll は stdcall 規約。WINFUNCTYPE を使わないと
+# スタック破壊が起き "Don't know how to convert parameter" エラーになる。
+if platform.system() == 'Windows':
+    SYNCPROC = ctypes.WINFUNCTYPE(
+        None,
+        ctypes.c_uint32,  # handle
+        ctypes.c_uint32,  # channel
+        ctypes.c_uint32,  # data
+        ctypes.c_void_p,  # user
+    )
+else:
+    SYNCPROC = ctypes.CFUNCTYPE(
+        None,
+        ctypes.c_uint32,  # handle
+        ctypes.c_uint32,  # channel
+        ctypes.c_uint32,  # data
+        ctypes.c_void_p,  # user
+    )
 
 # ============================================================
 # BASS Library Initialization
@@ -174,18 +220,29 @@ try:
         BASS_LIB.BASS_ChannelSetAttribute.argtypes = [
             ctypes.c_uint32, ctypes.c_uint32, ctypes.c_float
         ]
+        BASS_LIB.BASS_ChannelSetAttribute.restype = ctypes.c_bool
+        BASS_LIB.BASS_ChannelGetAttribute.argtypes = [
+            ctypes.c_uint32, ctypes.c_uint32, ctypes.POINTER(ctypes.c_float)
+        ]
+        BASS_LIB.BASS_ChannelGetAttribute.restype = ctypes.c_bool
         BASS_LIB.BASS_ChannelSetPosition.argtypes = [
             ctypes.c_uint32, ctypes.c_uint64, ctypes.c_uint32
         ]
         
         # --- チャンネル情報取得 ---
+        BASS_LIB.BASS_ChannelGetLength.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
         BASS_LIB.BASS_ChannelGetLength.restype = ctypes.c_uint64
+        BASS_LIB.BASS_ChannelGetPosition.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
         BASS_LIB.BASS_ChannelGetPosition.restype = ctypes.c_uint64
+        # BASS_ChannelBytes2Seconds(DWORD handle, QWORD pos) -> double
+        # argtypes 未定義だと Python int を QWORD に変換できずエラーになる
+        BASS_LIB.BASS_ChannelBytes2Seconds.argtypes = [ctypes.c_uint32, ctypes.c_uint64]
         BASS_LIB.BASS_ChannelBytes2Seconds.restype = ctypes.c_double
         BASS_LIB.BASS_ChannelSeconds2Bytes.argtypes = [
             ctypes.c_uint32, ctypes.c_double
         ]
         BASS_LIB.BASS_ChannelSeconds2Bytes.restype = ctypes.c_uint64
+        BASS_LIB.BASS_ChannelIsActive.argtypes = [ctypes.c_uint32]
         BASS_LIB.BASS_ChannelIsActive.restype = ctypes.c_uint32
         
         # --- FX & Sync ---
@@ -199,9 +256,14 @@ try:
         BASS_LIB.BASS_FXSetParameters.restype = ctypes.c_bool
         
         # --- Sync (ループ用) ---
+        # BASS_ChannelSetSync(DWORD handle, DWORD type, QWORD param, SYNCPROC *proc, void *user)
+        # Windows stdcall: QWORD(param) は 64bit 整数。WinDLL では c_uint64 必須。
         BASS_LIB.BASS_ChannelSetSync.argtypes = [
-            ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint64,
-            SYNCPROC, ctypes.c_void_p
+            ctypes.c_uint32,   # handle
+            ctypes.c_uint32,   # type  (DWORD)
+            ctypes.c_uint64,   # param (QWORD)
+            SYNCPROC,          # proc
+            ctypes.c_void_p,   # user
         ]
         BASS_LIB.BASS_ChannelSetSync.restype = ctypes.c_uint32
         BASS_LIB.BASS_ChannelRemoveSync.argtypes = [
@@ -214,6 +276,29 @@ try:
             ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32
         ]
         BASS_LIB.BASS_ChannelGetData.restype = ctypes.c_int
+        
+        # --- レベル取得 ---
+        BASS_LIB.BASS_ChannelGetLevel.argtypes = [ctypes.c_uint32]
+        BASS_LIB.BASS_ChannelGetLevel.restype = ctypes.c_uint32
+        
+        # BASS_ChannelGetLevelEx: float精度のRMSレベル取得 (bass.h準拠)
+        # flags: BASS_LEVEL_STEREO=2, BASS_LEVEL_RMS=4
+        BASS_LIB.BASS_ChannelGetLevelEx.argtypes = [
+            ctypes.c_uint32,   # handle
+            ctypes.POINTER(ctypes.c_float),  # levels (float配列)
+            ctypes.c_float,    # length (秒)
+            ctypes.c_uint32    # flags
+        ]
+        BASS_LIB.BASS_ChannelGetLevelEx.restype = ctypes.c_bool
+        
+        # BASS_ChannelSlideAttribute: スムーズな属性変化（クリックノイズ防止）
+        BASS_LIB.BASS_ChannelSlideAttribute.argtypes = [
+            ctypes.c_uint32,  # handle
+            ctypes.c_uint32,  # attrib
+            ctypes.c_float,   # value
+            ctypes.c_uint32   # time (ms)
+        ]
+        BASS_LIB.BASS_ChannelSlideAttribute.restype = ctypes.c_bool
         
         # --- プラグイン ---
         BASS_LIB.BASS_PluginLoad.argtypes = [

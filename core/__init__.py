@@ -22,6 +22,11 @@ from .audio_engine import AudioEngine, VCI100_MIDI
 # AI Module (already exists)
 # from .ai import PromptCoordinator, ...
 
+# Phase R4
+from .mix_advisor import MixAdvisor
+from .style_logger import StyleLogger
+from .hotcue_manager import HotCueManager, CueMode, CueStatus, LedCommand
+
 __all__ = [
     # Audio Constants
     'BASS_AVAILABLE',
@@ -35,4 +40,12 @@ __all__ = [
     'Deck',
     'AudioEngine',
     'VCI100_MIDI',
+
+    # Phase R4
+    'MixAdvisor',
+    'StyleLogger',
+    'HotCueManager',
+    'CueMode',
+    'CueStatus',
+    'LedCommand',
 ]

@@ -3,7 +3,7 @@ Energy Flow Analysis Module
 ============================
 
 Phase 9G: Context Aware AI - エネルギーフロー解析とコンテキスト判定
-Phase R1: エネルギー推移解析（暫定実装のみ）
+Phase R1: エネルギー推移解析（実装完了）
 
 このモジュールは以下の機能を提供します:
 1. エネルギーフロー分析（Phase 9G）
@@ -11,7 +11,7 @@ Phase R1: エネルギー推移解析（暫定実装のみ）
 3. ジャンル一貫性分析（Phase 9G）
 4. 戦略自動判定（Hypnotic/Story）（Phase 9G）
 5. エネルギー履歴管理（Phase 9G）
-6. エネルギー推移解析（Phase R1 - 暫定実装）
+6. セクション分割・フローパターン分類（Phase R1）
 """
 
 from typing import List, Dict, Tuple
@@ -129,14 +129,31 @@ class EnergyFlowAnalyzer:
         reasoning_parts = []
         
         # --- A. エナジーフロー分析 ---
+        # IQR動的閾値: 全履歴から間四分範囲を計算し、その円内に収まる場合を「フラット」と判定する。
+        # 固定値 < 0.3 はライブラリ構成次第で常に共通または常に非共通になる。
         recent = self.energy_history[-3:]  # 最新3トラック
-        energies = [e.energy_level for e in recent]
-        variance = 1.0
-        if len(energies) > 1:
-            mean = sum(energies) / len(energies)
-            variance = sum((x - mean) ** 2 for x in energies) / len(energies)
-        
-        is_flat_energy = variance < 0.3  # 分散0.3未満はフラット
+        recent_energies = [e.energy_level for e in recent]
+
+        # IQR閾値を全履歴から算出（履歴が少ない時は固定値にフォールバック）
+        all_energies = [e.energy_level for e in self.energy_history]
+        if len(all_energies) >= 4:
+            all_sorted = sorted(all_energies)
+            n = len(all_sorted)
+            q1 = all_sorted[n // 4]
+            q3 = all_sorted[(n * 3) // 4]
+            iqr = q3 - q1
+            # IQRの50%を閾値とする（全履歴のバラツきに応じて脱却判定が変化）
+            flat_threshold = iqr * 0.5 + 0.05  # 最小値は0.05（履歴が全全同一の時でも機能）
+        else:
+            flat_threshold = 0.3  # 履歴不足時のフォールバック
+
+        variance = 0.0
+        if len(recent_energies) > 1:
+            mean = sum(recent_energies) / len(recent_energies)
+            variance = sum((x - mean) ** 2 for x in recent_energies) / len(recent_energies)
+
+        energies = recent_energies  # 以降の判定で使用する変数を統一
+        is_flat_energy = variance < flat_threshold
         is_rising = energies[-1] > energies[0]  # エネルギー上昇中
         
         # --- B. DJ操作スタイル分析 ---
@@ -209,9 +226,11 @@ class EnergyFlowAnalyzer:
             >>> len(analyzer.energy_history)
             1
         """
+        raw_energy = analysis.get('energy', {}).get('numeric', 3.0)
         entry = EnergyHistoryEntry(
             track_name=analysis.get('filename', 'Unknown'),
-            energy_level=analysis.get('energy', {}).get('numeric', 3),
+            # 修正: round()による整数化を廃止し、floatのまま格納する
+            energy_level=max(1.0, min(5.0, float(raw_energy))),
             genre=analysis.get('genre', 'House'),
             bpm=analysis.get('bpm', 120.0),
             key=analysis.get('key', 'C')
@@ -267,120 +286,210 @@ class EnergyFlowAnalyzer:
         self.dj_style.record_filter(value)
     
     # ============================================================
-    # Phase R1: エネルギー推移解析（暫定実装）
+    # Phase R1: エネルギー推移解析
     # ============================================================
-    
+
     def analyze_energy_flow(self, track_info: dict) -> Dict:
         """
-        トラックのエネルギー推移を解析（Phase R1 - 暫定実装）
-        
-        [Phase R1で完全実装予定]
-        現在は基本的な情報のみを返す暫定実装です。
-        
-        将来実装予定:
-        - セクション構造の詳細推定
-        - フローパターンの高度な検出
-        - Z-score正規化による精密なエネルギー分析
-        
+        トラックのエネルギー推移を解析する。
+
+        track_analyzer._analyze_energy() が生成する energy_data['profile']
+        （1秒ごとの {'time': float, 'level': float} リスト）を入力として
+        セクション分割とフローパターン分類を行う。
+
         Args:
-            track_info (dict): トラック情報
-                - energy (Dict): エネルギー情報
-                    - numeric (int): 数値エネルギー（1-5）
-        
+            track_info (dict): analyze_track() の戻り値
+                - energy (Dict):
+                    - numeric (float): 相対エネルギー（1.0-5.0）
+                    - profile (List[Dict]): 1秒ごとの level 配列
+
         Returns:
-            Dict: エネルギーフロー情報
-                - energy_level (int): エネルギーレベル
-                - sections (List): セクション情報（空リスト）
-                - flow_pattern (str): フローパターン（'standard'固定）
-        
-        Note:
-            Phase R1で以下を実装予定:
-            - セクション構造推定（_estimate_sections）
-            - フローパターン検出（_detect_flow_pattern）
-            - Z-score正規化（_normalize_energy）
+            Dict:
+                - energy_level (float): 相対エネルギー（1.0-5.0）
+                - energy_label (str): 'low' / 'medium' / 'high'
+                - sections (List[Dict]): セクション情報
+                - flow_pattern (str): フローパターン
         """
-        # [Phase R1で実装]
+        energy = track_info.get('energy', {})
+        numeric = float(energy.get('numeric', 3.0))
+        profile = energy.get('profile', [])
+
+        energy_label = self._normalize_energy(numeric)
+        sections     = self._estimate_sections(profile)
+        flow_pattern = self._detect_flow_pattern(sections)
+
         return {
-            'energy_level': track_info.get('energy', {}).get('numeric', 3),
-            'sections': [],
-            'flow_pattern': 'standard'
+            'energy_level':  numeric,
+            'energy_label':  energy_label,
+            'sections':      sections,
+            'flow_pattern':  flow_pattern,
         }
-    
-    def _normalize_energy(self, energy: float) -> str:
+
+    def _normalize_energy(self, numeric: float) -> str:
         """
-        Z-score正規化（Phase R1 - 暫定実装）
-        
-        [Phase R1で完全実装予定]
-        現在は簡易的な3段階変換のみを実装しています。
-        
-        将来実装予定:
-        - 履歴全体の平均・標準偏差を使用したZ-score計算
-        - より精密なエネルギーレベル分類
-        
+        相対エネルギー値（1.0-5.0）を履歴の分布に基づいてラベル化する。
+
+        履歴が4件以上ある場合は IQR を使って low/medium/high を動的に決定する。
+        履歴が少ない場合はスケールを3等分した固定境界にフォールバックする。
+
         Args:
-            energy (float): エネルギー値（0.0-1.0）
-        
+            numeric (float): recalculate_relative_energy() が出力する 1.0-5.0 の値
+
         Returns:
-            str: 正規化後のエネルギーレベル
-                - "low": 0.0-0.3
-                - "medium": 0.3-0.6
-                - "high": 0.6-1.0
-        
-        Note:
-            Phase R1で完全なZ-score正規化を実装予定
+            str: 'low' | 'medium' | 'high'
         """
-        # [Phase R1で実装]
-        if energy < 0.3:
-            return "low"
-        elif energy < 0.6:
-            return "medium"
+        all_levels = [e.energy_level for e in self.energy_history]
+
+        if len(all_levels) >= 4:
+            sorted_levels = sorted(all_levels)
+            n = len(sorted_levels)
+            q1 = sorted_levels[n // 4]
+            q3 = sorted_levels[(n * 3) // 4]
+            if numeric <= q1:
+                return 'low'
+            elif numeric >= q3:
+                return 'high'
+            else:
+                return 'medium'
+
+        # 履歴不足: 1-5 スケールを3等分
+        if numeric < 2.33:
+            return 'low'
+        elif numeric < 3.67:
+            return 'medium'
         else:
-            return "high"
-    
-    def _estimate_sections(self, energy: float, duration: int) -> List[Dict]:
+            return 'high'
+
+    def _estimate_sections(self, profile: List[Dict]) -> List[Dict]:
         """
-        セクション構造推定（Phase R1で実装予定）
-        
-        トラックのエネルギー値と長さから、セクション構造を推定します。
-        
+        1秒ごとの energy profile からセクション境界を推定する。
+
+        アルゴリズム:
+        1. プロファイルを8秒ウィンドウで移動平均して平滑化する
+        2. 隣接ウィンドウ間の差分が THRESHOLD を超えた秒をセクション境界とする
+        3. 各セクションに label（'intro'/'build'/'drop'/'breakdown'/'outro'）を割り当てる
+
+        label の割当ルール:
+        - 先頭セクション: 'intro'
+        - 末尾セクション: 'outro'
+        - 中間でレベルが直前セクションより +0.15 以上上昇: 'drop'
+        - 中間でレベルが直前セクションより -0.15 以上低下: 'breakdown'
+        - それ以外の中間: 'build'
+
         Args:
-            energy (float): エネルギー値
-            duration (int): トラック長（秒）
-        
+            profile (List[Dict]): [{'time': float, 'level': float}, ...]
+
         Returns:
-            List[Dict]: セクション情報リスト
-        
-        Raises:
-            NotImplementedError: Phase R1で実装予定
-        
-        Note:
-            Phase R1で以下を実装予定:
-            - Intro/Build/Drop/Outro等のセクション検出
-            - セクション境界の推定
-            - セクション毎のエネルギー特性分析
+            List[Dict]: [
+                {
+                    'start':  float,   # セクション開始秒
+                    'end':    float,   # セクション終了秒
+                    'level':  float,   # セクション内 level の平均値
+                    'label':  str,     # 'intro'/'build'/'drop'/'breakdown'/'outro'
+                },
+                ...
+            ]
         """
-        raise NotImplementedError("Phase R1で実装予定")
-    
+        SMOOTH_WIN  = 8    # 移動平均ウィンドウ幅（秒）
+        THRESHOLD   = 0.12 # セクション境界と判定する level 差分
+        MIN_SEC     = 8    # セクションの最短秒数
+
+        if len(profile) < SMOOTH_WIN * 2:
+            # プロファイルが短すぎる場合はトラック全体を1セクションとして返す
+            if not profile:
+                return []
+            level = sum(p['level'] for p in profile) / len(profile)
+            return [{'start': profile[0]['time'], 'end': profile[-1]['time'],
+                     'level': level, 'label': 'intro'}]
+
+        levels = [p['level'] for p in profile]
+        times  = [p['time']  for p in profile]
+
+        # 移動平均で平滑化
+        smoothed = []
+        half = SMOOTH_WIN // 2
+        for i in range(len(levels)):
+            lo = max(0, i - half)
+            hi = min(len(levels), i + half + 1)
+            smoothed.append(sum(levels[lo:hi]) / (hi - lo))
+
+        # セクション境界の検出
+        boundaries = [0]  # 先頭は常に境界
+        last_boundary = 0
+        for i in range(1, len(smoothed)):
+            if (times[i] - times[last_boundary]) >= MIN_SEC:
+                delta = abs(smoothed[i] - smoothed[i - 1])
+                if delta >= THRESHOLD:
+                    boundaries.append(i)
+                    last_boundary = i
+        boundaries.append(len(profile))  # 末尾
+
+        # セクションオブジェクトの生成
+        sections = []
+        for k in range(len(boundaries) - 1):
+            lo = boundaries[k]
+            hi = boundaries[k + 1]
+            seg = levels[lo:hi]
+            sec_level = sum(seg) / len(seg) if seg else 0.0
+            sections.append({
+                'start': times[lo],
+                'end':   times[hi - 1] if hi - 1 < len(times) else times[-1],
+                'level': round(sec_level, 4),
+                'label': '',  # 後続ステップで設定
+            })
+
+        # label の割当
+        for i, sec in enumerate(sections):
+            if i == 0:
+                sec['label'] = 'intro'
+            elif i == len(sections) - 1:
+                sec['label'] = 'outro'
+            else:
+                prev_level = sections[i - 1]['level']
+                if sec['level'] - prev_level >= 0.15:
+                    sec['label'] = 'drop'
+                elif prev_level - sec['level'] >= 0.15:
+                    sec['label'] = 'breakdown'
+                else:
+                    sec['label'] = 'build'
+
+        return sections
+
     def _detect_flow_pattern(self, sections: List[Dict]) -> str:
         """
-        フローパターン検出（Phase R1で実装予定）
-        
-        セクション情報からトラック全体のフローパターンを検出します。
-        
+        セクション列からトラック全体のフローパターンを分類する。
+
+        分類ルール（優先順位順）:
+        1. 'drop' を含む         → 'peak-time'  （EDM的なクライマックス構造）
+        2. 'breakdown' を含む    → 'progressive' （起伏のある展開）
+        3. セクション数が2以下   → 'minimal'     （単調・ミニマル）
+        4. level が単調増加      → 'progressive'
+        5. その他                → 'standard'
+
         Args:
-            sections (List[Dict]): セクション情報リスト
-        
+            sections (List[Dict]): _estimate_sections() の戻り値
+
         Returns:
-            str: フローパターン（例: 'progressive', 'peak-time', 'minimal'）
-        
-        Raises:
-            NotImplementedError: Phase R1で実装予定
-        
-        Note:
-            Phase R1で以下を実装予定:
-            - Progressive系のパターン検出
-            - Peak-time系のパターン検出
-            - Minimal系のパターン検出
-            - その他のフローパターン分類
+            str: 'peak-time' | 'progressive' | 'minimal' | 'standard'
         """
-        raise NotImplementedError("Phase R1で実装予定")
+        if not sections:
+            return 'standard'
+
+        labels = [s['label'] for s in sections]
+
+        if 'drop' in labels:
+            return 'peak-time'
+
+        if 'breakdown' in labels:
+            return 'progressive'
+
+        if len(sections) <= 2:
+            return 'minimal'
+
+        # level が全体を通じて単調増加しているか確認
+        levels = [s['level'] for s in sections]
+        is_monotone_rising = all(levels[i] <= levels[i + 1] for i in range(len(levels) - 1))
+        if is_monotone_rising:
+            return 'progressive'
+
+        return 'standard'
