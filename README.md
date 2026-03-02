@@ -31,7 +31,7 @@ Vestaxの名機 **VCI-100** を現代のPC環境で蘇らせる、AI搭載型DJ�
 * **BPM Sync**: Mixxx bpmcontrol.cpp L552-627を移植した3段階位相制御（±10ms精度）。
 * **HOT CUE**: 8スロット対応（通常CUE / LoopCue）。永続化対応。
 
-### 3. トラック解析 (TrackAnalyzer V10)
+### 3. トラック解析
 
 * **自動解析**: ライブラリ追加時にBPM・Key・Energy Profileをバックグラウンドで解析・キャッシュ（MD5ハッシュキー）。
 * **ビートグリッド**: 先頭60秒librosa実測値 + 60秒以降BPM固定外挿のハイブリッド方式。
@@ -45,7 +45,7 @@ Vestaxの名機 **VCI-100** を現代のPC環境で蘇らせる、AI搭載型DJ�
 * **Energy Flow Panel**: 2デッキのエネルギー曲線を同期表示。ドロップ・ブレイクのタイミングを視認可能。
 * **VUメーター**: L/Rリアルタイムレベル表示。
 
-### 5. ゲーミフィケーション (Phase 9)
+### 5. ゲーミフィケーション
 
 * **スコアリング**: Beatmatching・Key Compatibility・EQ Mixing・Energy Flowを100msごとに評価。Combo倍率最大2.0x。
 * **World Tour モード**: 東京・ベルリン・イビザ・シカゴの4都市、各都市固有のルールとGeminiペルソナ。
